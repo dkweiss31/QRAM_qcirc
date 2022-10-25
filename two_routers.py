@@ -38,25 +38,26 @@ gate_list = (("CNOT", ["address0", "router0"]),
              ("SWAP", ["address1", "input"]),
              ("CNOT", ["address0", "router0"]),
              )
-test_qcirc = Qcirc(name_dict=name_dict)
+test_qcirc = Qcirc(name_dict=name_dict, gate_list=gate_list)
+test_qcirc.loop_over_all_inputs()
 
-for d0 in range(2):
-    for d1 in range(2):
-        for d2 in range(2):
-            for d3 in range(2):
-                for addr0 in range(2):
-                    for addr1 in range(2):
-                        qvec = np.zeros(len(name_list), dtype=int)
-                        qvec[name_dict["address0"]] = addr0
-                        qvec[name_dict["address1"]] = addr1
-                        qvec[name_dict["data0"]] = d0
-                        qvec[name_dict["data1"]] = d1
-                        qvec[name_dict["data2"]] = d2
-                        qvec[name_dict["data3"]] = d3
-                        init_qvec = np.copy(qvec)
-                        result = test_qcirc.run(qvec, gate_list)
-                        ideal_result = test_qcirc.ideal_qram(init_qvec)
-                        print(init_qvec, result, ideal_result)
-                        if not np.allclose(result, ideal_result):
-                            print("not ideal")
+# for d0 in range(2):
+#     for d1 in range(2):
+#         for d2 in range(2):
+#             for d3 in range(2):
+#                 for addr0 in range(2):
+#                     for addr1 in range(2):
+#                         qvec = np.zeros(len(name_list), dtype=int)
+#                         qvec[name_dict["address0"]] = addr0
+#                         qvec[name_dict["address1"]] = addr1
+#                         qvec[name_dict["data0"]] = d0
+#                         qvec[name_dict["data1"]] = d1
+#                         qvec[name_dict["data2"]] = d2
+#                         qvec[name_dict["data3"]] = d3
+#                         init_qvec = np.copy(qvec)
+#                         result = test_qcirc.run_single(qvec, gate_list)
+#                         ideal_result = test_qcirc.ideal_qram(init_qvec)
+#                         print(init_qvec, result, ideal_result)
+#                         if not np.allclose(result, ideal_result):
+#                             print("not ideal")
 
