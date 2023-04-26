@@ -220,7 +220,7 @@ class Qcirc:
             qvec = gate_func(qvec, *gate_params)
         return qvec
 
-    def loop_over_all_inputs(self):
+    def loop_over_all_inputs_test(self):
         """
         check that the qram works over all possible inputs (addresses
         and classical data)
