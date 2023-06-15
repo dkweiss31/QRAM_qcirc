@@ -1,4 +1,4 @@
-from qutip import tensor, Qobj, basis, qeye
+from qutip import tensor, Qobj, basis, qeye, to_kraus, sigmax, sigmay, sigmaz
 import numpy as np
 
 def id_wrap_ops(op: Qobj, idx: int, truncated_dims: list):

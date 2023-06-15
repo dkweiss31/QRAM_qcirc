@@ -1,3 +1,5 @@
+from typing import List
+
 from qutip import (
     basis,
     tensor,
@@ -5,9 +7,7 @@ from qutip import (
     qeye,
     operator_to_vector,
     vector_to_operator,
-    sigmax,
     to_kraus,
-    sigmay,
     sigmaz,
     destroy,
     liouvillian,
@@ -18,6 +18,8 @@ from utils import id_wrap_ops, construct_basis_states_list, project_U
 
 
 class SimulateBosonicOperations:
+    """
+    """
     def __init__(self, sx, sy, sz, chi, comp_basis_states, tmon_dim, cavity_dim):
         self.sx = sx
         self.sy = sy
@@ -27,7 +29,22 @@ class SimulateBosonicOperations:
         self.tmon_dim = tmon_dim
         self.cavity_dim = cavity_dim
 
-    def cZZU(self, a_op: Qobj, b_op: Qobj, c_ops=None):
+    def cZZU(self, a_op: Qobj, b_op: Qobj, c_ops: List[Qobj] = None):
+        """
+        Parameters
+        ----------
+        a_op: Qobj
+            lowering operator for the first bosonic mode, coupled to the transmon
+        b_op: Qobj
+            lowering operator for the second bosonic mode
+        c_ops: List[Qobj]
+            collapse operators
+
+        Returns
+        -------
+        propagator corresponding to the cZZ unitary as described in
+        Tsunoda et al. arXiv:2212.11196 (2022) and Teoh et al. arXiv:2212.12077 (2022)
+        """
         g = np.sqrt(3) * self.chi / 2
         H = -0.5 * self.chi * self.sz * a_op.dag() * a_op + 0.5 * g * (
             a_op.dag() * b_op + a_op * b_op.dag()
@@ -36,26 +53,73 @@ class SimulateBosonicOperations:
         t = 2.0 * np.pi / Omega
         return self._propagator(H, t, c_ops=c_ops)
 
-    def R_osc(self, a_op: Qobj, phi: float, c_ops=None):
-        """this gate is done in software and thus can be done with unit fidelity
-        (hence why the collapse operators are not used even in the case when they are passed)"""
+    def R_osc(self, a_op: Qobj, phi: float, c_ops: List[Qobj] = None):
+        """
+        this gate is done in software and thus can be done with unit fidelity
+        (hence why the collapse operators are not used even in the case when they are passed)
+        Parameters
+        ----------
+        a_op: Qobj
+            lowering operator of the mode we want to apply a
+            phase correction to
+        phi: float
+            parameter describing the phase correction
+        c_ops: List[Qobj]
+            unused collapse operators
+        Returns
+        -------
+        propagator corresponding to a single-cavity rotation
+        """
         cav_rotation = (-1j * phi * a_op.dag() * a_op).expm()
         if c_ops is None:
             return cav_rotation
         return to_super(cav_rotation)
 
-    def R_tmon(self, g: float, t: float, direction="X", c_ops=None):
+    def R_tmon(self, g: float, t: float, direction: str = "X", c_ops: List[Qobj] = None):
+        r"""
+        Parameters
+        ----------
+        g: float
+            drive strength: the Hamiltonian is :math:`H = 0.5 * g * \sigma_{i}, i\in\{x,y,z\}`
+        t: float
+            time for which the interaction should act
+        direction: str
+            either "X", "Y", or "Z" depending on the rotation direction
+        c_ops: List[Qobj]
+            collapse operators
+
+        Returns
+        -------
+        propagator corresponding to a transmon rotation
+        """
         if direction == "X":
             s_op = self.sx
         elif direction == "Y":
             s_op = self.sy
         elif direction == "Z":
-            s_op == self.sz
+            s_op = self.sz
         else:
             raise RuntimeError("specified direction must be 'X', 'Y', or 'Z'")
         return self._propagator(0.5 * g * s_op, t, c_ops=c_ops)
 
-    def _propagator(self, H: Qobj, t: float, c_ops=None):
+    def _propagator(self, H: Qobj, t: float, c_ops: List[Qobj] = None):
+        """
+        Parameters
+        ----------
+        H: Qobj
+            Hamiltonian
+        t: float
+            time for which the Hamiltonian acts
+        c_ops: List[Qobj]
+            list of collapse operators
+
+        Returns
+        -------
+        propagator corresponding to the Hamiltonian acting for a time :math:`t`.
+        If c_ops are not passed, we assume the Hamiltonian is time
+        independent and exponentiate it. If c_ops are passed, we construct the
+        Liouvillian and exponentiate that instead.
+        """
         if c_ops is None:
             return (-1j * H * t).expm()
         return (liouvillian(H, c_ops) * t).expm()
@@ -144,8 +208,8 @@ class SimulateBosonicOperations:
                 detected_pop_total += np.real(detected_pop.data.toarray()[0, 0])
         return detected_pop_total / num_initial_states
 
-    def cZZ_time(self, params):
-        (_, g) = params
+    def cZZ_time(self):
+        g = np.sqrt(3) * self.chi / 2
         Omega = np.sqrt(g**2 + (self.chi / 2) ** 2)
         return 2.0 * np.pi / Omega
 
@@ -179,24 +243,14 @@ class SimulateBosonicOperations:
     def measurement_channel(self, rho, measurement_op):
         if measurement_op.type == "oper":
             new_rho = measurement_op * rho * measurement_op.dag()
-            prob = np.trace(new_rho)
-            return new_rho / prob
+            return new_rho, np.trace(new_rho)
         elif measurement_op.type == "super":
             new_rho = measurement_op * rho
-            prob = np.trace(vector_to_operator(new_rho))
-            return new_rho / prob
+            return new_rho, np.trace(vector_to_operator(new_rho))
         else:
             raise RuntimeError(
                 'measurement_op should be either of type "oper" or "super"'
             )
-
-    def apply_channel(self, rho, U_real, measurement_op=None):
-        assert U_real.type == "super"
-        new_rho = U_real * rho
-        if measurement_op is None:
-            return new_rho
-        else:
-            return self.measurement_channel(new_rho, measurement_op)
 
     def fidelity_kraus(self, superop, ideal_op, keep_idxs):
         dim = len(keep_idxs)
@@ -208,8 +262,8 @@ class SimulateBosonicOperations:
         )
 
     def failure_rate(self, U_real):
-        comp_basis_states, superpos_states = self.state_basis()
-        all_init_states = comp_basis_states + superpos_states
+        comp_basis_states, superpos_basis_states, basis_state_labels, super_state_labels = self.state_basis()
+        all_init_states = comp_basis_states + superpos_basis_states
         failure_rate = 0.0
         measurement_op = tensor(
             qeye(self.cavity_dim),
@@ -218,13 +272,15 @@ class SimulateBosonicOperations:
         )
         for idx, state in enumerate(all_init_states):
             rho = operator_to_vector(state * state.dag())
-            propagated_rho = vector_to_operator(
-                self.apply_channel(rho, U_real, measurement_op=None)
-            )
+            propagated_rho = vector_to_operator(U_real * rho)
             failure_rate += 1 - np.trace(measurement_op * propagated_rho)
         return failure_rate / len(all_init_states)
+    
+    def process_fidelity_nielsen(self, entanglement_fidelity, num_qubits=2):
+        dim = num_qubits**2
+        return (dim * entanglement_fidelity + 1) / (dim + 1)
 
-    def fidelity_nielsen(
+    def entanglement_fidelity_nielsen(
         self,
         U_real,
         U_ideal,
@@ -238,15 +294,21 @@ class SimulateBosonicOperations:
         dim = 2**num_qubits
         op_basis, pauli_keys = self.operator_basis(s_ops_cavs)
         st_contr = 0.0
+        total_prob = 0.0
+        num_states = 0
         for j, op in enumerate(op_basis):
             alpha_state_pair = self.decompose_op_into_state_basis(
                 op, pauli_keys[j]
             )
-            for k, (coeff, pauli_rho) in enumerate(alpha_state_pair):
+            for k, (coeff, pauli_rho, label) in enumerate(alpha_state_pair):
                 rho = operator_to_vector(pauli_rho)
-                propagated_rho = vector_to_operator(
-                    self.apply_channel(rho, U_real, measurement_op=measurement_op)
-                )
+                propagated_rho = U_real * rho
+                if measurement_op is not None:
+                    propagated_rho, prob = self.measurement_channel(propagated_rho, measurement_op)
+                else:
+                    prob = 0.0
+                propagated_rho = vector_to_operator(propagated_rho)
+                total_prob += np.abs(coeff) * prob
                 if ptrace_idxs is not None:
                     propagated_rho = propagated_rho.ptrace(ptrace_idxs)
                     op = op.ptrace(ptrace_idxs)
@@ -257,10 +319,13 @@ class SimulateBosonicOperations:
                 st_contr += coeff * np.trace(
                     U_ideal * projected_op.dag() * U_ideal.dag() * projected_rho
                 )
-        return (st_contr + dim**2) / (dim**2 * (dim + 1))
+                num_states += 1
+        return st_contr / dim**3, total_prob / num_states
 
     def state_basis(self):
         superpos_states = []
+        basis_state_labels = ["|00>", "|01>", "|10>", "|11>"]
+        super_state_labels = []
         for i, comp_bas_state_1 in enumerate(self.comp_basis_states):
             for j, comp_bas_state_2 in enumerate(self.comp_basis_states):
                 if j > i:
@@ -272,23 +337,32 @@ class SimulateBosonicOperations:
                     superpos_states.append(
                         (comp_bas_state_1 - 1j * comp_bas_state_2).unit()
                     )
-        return self.comp_basis_states, superpos_states
+                    super_state_labels.append(basis_state_labels[i] + " + " + basis_state_labels[j])
+                    super_state_labels.append(basis_state_labels[i] + " - " + basis_state_labels[j])
+                    super_state_labels.append(basis_state_labels[i] + " +i " + basis_state_labels[j])
+                    super_state_labels.append(basis_state_labels[i] + " -i " + basis_state_labels[j])
+        return self.comp_basis_states, superpos_states, basis_state_labels, super_state_labels
 
     def decompose_op_into_state_basis(self, op, pauli_key):
-        comp_basis_states, superpos_basis_states = self.state_basis()
+        """given an operator, decompose it in terms of density matrices"""
+        comp_basis_states, superpos_basis_states, basis_state_labels, super_state_labels = self.state_basis()
         if "X" not in pauli_key and "Y" not in pauli_key:
             basis_states = comp_basis_states
+            labels = basis_state_labels
         else:
             basis_states = comp_basis_states + superpos_basis_states
+            labels = basis_state_labels + super_state_labels
         st_rho = [state * state.dag() for state in basis_states]
         alpha_coeffs = np.array([np.trace(rho * op) for rho in st_rho])
+        # test that we actually have decomposed the operator into 
+        # a sum over density matrices
         assert sum([alpha_coeffs[i] * rho for i, rho in enumerate(st_rho)]) == op
-        alpha_state_pair = [
-            (alpha_coeffs[i], state)
+        alpha_state_label_triplet = [
+            (alpha_coeffs[i], state, labels[i])
             for i, state in enumerate(st_rho)
             if alpha_coeffs[i] != 0
         ]
-        return alpha_state_pair
+        return alpha_state_label_triplet
 
     def operator_basis(self, s_ops_cavs):
         id_cav, sx_cav, sy_cav, sz_cav = s_ops_cavs
@@ -327,7 +401,7 @@ class SimulateBosonicOperations:
             for k in range(2)
         ]
         cZZU_projected = project_U(
-            self.cZZU(chi, a, b, sz), Fock_states_spec, truncated_dims
+            self.cZZU(a, b), Fock_states_spec, truncated_dims
         )
         ideal_cZZU = (-1j * (np.pi / 2) * sz * (a.dag() * a + b.dag() * b)).expm()
         ideal_cZZU_projected = project_U(
