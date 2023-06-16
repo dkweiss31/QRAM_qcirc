@@ -1,11 +1,13 @@
 from qutip import tensor, Qobj, basis, qeye, to_kraus, sigmax, sigmay, sigmaz
 import numpy as np
 
+
 def id_wrap_ops(op: Qobj, idx: int, truncated_dims: list):
     assert op.dims[0][0] == truncated_dims[idx]
     id_list = [qeye(dim) for dim in truncated_dims]
     id_list[idx] = op
     return tensor(*id_list)
+
 
 def construct_basis_states_list(Fock_states_spec: list, truncated_dims: list):
     basis_states = []
@@ -17,18 +19,29 @@ def construct_basis_states_list(Fock_states_spec: list, truncated_dims: list):
         basis_states.append(tensor(*basis_list))
     return basis_states
 
-def project_U(U: Qobj, Fock_states_spec: list, truncated_dims: list):
-    dim_new_U = len(Fock_states_spec)
-    basis_states = np.zeros((dim_new_U, np.prod(truncated_dims)), dtype=complex)
-    # converting to numpy array - this is a hack!
-    for i, state_spec in enumerate(Fock_states_spec):
-        basis_list = [
-            basis(truncated_dims[j], state_spec[j])
-            for j in range(len(truncated_dims))
-        ]
-        basis_states[i, :] = tensor(*basis_list).data.toarray()[:, 0]
-    new_U = np.conjugate(basis_states) @ U.data.toarray() @ basis_states.T
-    return Qobj(new_U)
+
+def project_U(U: Qobj, Fock_states_spec: list = None, truncated_dims: list = None, basis_states: list = None):
+    if basis_states is None:
+        dim_new_U = len(Fock_states_spec)
+        basis_states = np.zeros((dim_new_U, np.prod(truncated_dims)), dtype=complex)
+        # converting to numpy array - this is a hack!
+        for i, state_spec in enumerate(Fock_states_spec):
+            basis_list = [
+                basis(truncated_dims[j], state_spec[j])
+                for j in range(len(truncated_dims))
+            ]
+            basis_states[i, :] = tensor(*basis_list).data.toarray()[:, 0]
+        new_U = np.conjugate(basis_states) @ U.data.toarray() @ basis_states.T
+        return Qobj(new_U)
+    else:
+        # assume basis_states is a list of kets
+        dim_new_U = len(basis_states)
+        new_U = np.zeros((dim_new_U, dim_new_U), dtype=complex)
+        for i, basis_state_0 in enumerate(basis_states):
+            for j, basis_state_1 in enumerate(basis_states):
+                new_U[i, j] = (basis_state_0.dag() * U * basis_state_1).data.toarray()[0, 0]
+        return Qobj(new_U)
+
 
 def truncate_superoperator(superop, keep_idxs):
     """
@@ -38,7 +51,7 @@ def truncate_superoperator(superop, keep_idxs):
         superoperator to truncate. We consider the situation where certain
         states are relevant for predicting time evolution, however the gate under consideration
         does not care about the time evolution of those states themselves (with population
-        e.g. beginning in that state.
+        e.g. beginning in that state.)
     keep_idxs
         indices of the states to keep
     Returns
@@ -65,6 +78,7 @@ def truncate_superoperator(superop, keep_idxs):
         dims=[[[keep_dim], [keep_dim]], [[keep_dim], [keep_dim]]],
     )
 
+
 def my_to_chi(q_oper):
     """
     q_oper
@@ -84,6 +98,7 @@ def my_to_chi(q_oper):
         ]
     )
     return np.conjugate(e_ij_coeffs).T @ e_ij_coeffs
+
 
 def calc_fidel_chi(chi_real, chi_ideal):
     return (4 * np.trace(chi_real @ chi_ideal) + np.trace(chi_real)) / 5

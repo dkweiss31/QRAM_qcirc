@@ -1,20 +1,17 @@
 from typing import List
 
 from qutip import (
-    basis,
     tensor,
     Qobj,
-    qeye,
     operator_to_vector,
     vector_to_operator,
-    to_kraus,
     sigmaz,
     destroy,
     liouvillian,
     to_super,
 )
 import numpy as np
-from utils import id_wrap_ops, construct_basis_states_list, project_U
+from utils import id_wrap_ops, project_U
 
 
 class SimulateBosonicOperations:
@@ -53,7 +50,8 @@ class SimulateBosonicOperations:
         t = 2.0 * np.pi / Omega
         return self._propagator(H, t, c_ops=c_ops)
 
-    def R_osc(self, a_op: Qobj, phi: float, c_ops: List[Qobj] = None):
+    @staticmethod
+    def R_osc(a_op: Qobj, phi: float, c_ops: List[Qobj] = None):
         """
         this gate is done in software and thus can be done with unit fidelity
         (hence why the collapse operators are not used even in the case when they are passed)
@@ -102,7 +100,8 @@ class SimulateBosonicOperations:
             raise RuntimeError("specified direction must be 'X', 'Y', or 'Z'")
         return self._propagator(0.5 * g * s_op, t, c_ops=c_ops)
 
-    def _propagator(self, H: Qobj, t: float, c_ops: List[Qobj] = None):
+    @staticmethod
+    def _propagator(H: Qobj, t: float, c_ops: List[Qobj] = None):
         """
         Parameters
         ----------
@@ -139,7 +138,8 @@ class SimulateBosonicOperations:
         U3 = self.cZU(b_op, c_ops=c_ops)
         return U1 * U2 * U3
 
-    def SWAP(self, a_op: Qobj, b_op: Qobj):
+    @staticmethod
+    def SWAP(a_op: Qobj, b_op: Qobj):
         return ((np.pi / 2) * (a_op.dag() * b_op - a_op * b_op.dag())).expm()
 
     def cZZ_time(self):
@@ -161,7 +161,8 @@ class SimulateBosonicOperations:
         U_b = self.R_osc(b_op, -np.pi / 2, c_ops=c_ops)
         return U_a * U_b * U_tmon_y_min * JPP * U_tmon_x * JPP * U_tmon_y
 
-    def measurement_channel(self, rho, measurement_op):
+    @staticmethod
+    def measurement_channel(rho, measurement_op):
         if measurement_op.type == "oper":
             new_rho = measurement_op * rho * measurement_op.dag()
             return new_rho, np.trace(new_rho)
@@ -173,7 +174,8 @@ class SimulateBosonicOperations:
                 'measurement_op should be either of type "oper" or "super"'
             )
     
-    def process_fidelity_nielsen(self, entanglement_fidelity, num_qubits=2):
+    @staticmethod
+    def process_fidelity_nielsen(entanglement_fidelity, num_qubits=2):
         dim = num_qubits**2
         return (dim * entanglement_fidelity + 1) / (dim + 1)
 
@@ -181,15 +183,13 @@ class SimulateBosonicOperations:
         self,
         U_real,
         U_ideal,
-        Fock_states_spec,
-        truncated_dims,
-        s_ops_cavs,
+        basis_states,
         measurement_op=None,
         ptrace_idxs=None,
         num_qubits=2,
     ):
         dim = 2**num_qubits
-        alpha_list, state_list, op_basis = self.operator_basis_lidar(self.comp_basis_states)
+        alpha_list, state_list, op_basis = self.operator_basis_lidar(basis_states=basis_states)
         overall_contr = 0.0
         total_prob = 0.0
         num_states = 0
@@ -207,9 +207,9 @@ class SimulateBosonicOperations:
                     propagated_rho = propagated_rho.ptrace(ptrace_idxs)
                     op = op.ptrace(ptrace_idxs)
                 projected_rho = project_U(
-                    propagated_rho, Fock_states_spec, truncated_dims
+                    propagated_rho, basis_states=basis_states
                 )
-                projected_op = project_U(op, Fock_states_spec, truncated_dims)
+                projected_op = project_U(op, basis_states=basis_states)
                 state_contr = coeff * np.trace(
                     U_ideal * projected_op.dag() * U_ideal.dag() * projected_rho
                 )
@@ -234,36 +234,30 @@ class SimulateBosonicOperations:
                           tensor(SR_comp_bas_states[0], SR_comp_bas_states[3])]
         return basis_state_DR
 
-    def operator_basis_lidar(self, basis_states):
-        op_basis = [state * state.dag() for state in basis_states]
-        alpha_list = [(1.0,), (1.0,), (1.0,), (1.0,)]
-        state_list = [(state * state.dag(),) for state in basis_states]
+    @staticmethod
+    def _operator_basis_lidar(ket_0, ket_1):
+        pl_state = (ket_0 + ket_1).unit()
+        min_state = (ket_0 + 1j * ket_1).unit()
+        return ((1, 1j, -0.5 * (1 + 1j), -0.5 * (1 + 1j)),
+                (pl_state * pl_state.dag(), min_state * min_state.dag(),
+                ket_0 * ket_0.dag(), ket_1 * ket_1.dag()))
+
+    def operator_basis_lidar(self, basis_states=None):
+        if basis_states is None:
+            basis_states = self.comp_basis_states
+        op_basis, alpha_list, state_list = [], [], []
         for i, ket_0 in enumerate(basis_states):
             for j, ket_1 in enumerate(basis_states):
-                if j > i:
+                if i == j:
+                    alpha_list.append((1.0,))
+                    op_basis.append(ket_0 * ket_0.dag())
+                    state_list.append((ket_0 * ket_0.dag(),))
+                else:
                     op_basis.append(ket_0 * ket_1.dag())
-                    op_basis.append(ket_1 * ket_0.dag())
-                    alpha_list.append((1, 1j, -0.5 * (1 + 1j), -0.5 * (1 + 1j)))
-                    alpha_list.append((1, 1j, -0.5 * (1 + 1j), -0.5 * (1 + 1j)))
-                    pl_state = (ket_0 + ket_1).unit()
-                    pl_Y_state = (ket_0 + 1j * ket_1).unit()
-                    min_Y_state = (1j * ket_0 + ket_1).unit()
-                    state_list.append((pl_state * pl_state.dag(),
-                                       pl_Y_state * pl_Y_state.dag(),
-                                       ket_0 * ket_0.dag(),
-                                       ket_1 * ket_1.dag(),))
-                    state_list.append((pl_state * pl_state.dag(),
-                                       min_Y_state * min_Y_state.dag(),
-                                       ket_0 * ket_0.dag(),
-                                       ket_1 * ket_1.dag(),))
-                    assert ket_0 * ket_1.dag() == (pl_state * pl_state.dag()
-                                                   + 1j * pl_Y_state * pl_Y_state.dag()
-                                                   - 0.5 * (1 + 1j) * ket_0 * ket_0.dag()
-                                                   - 0.5 * (1 + 1j) * ket_1 * ket_1.dag())
-                    assert ket_1 * ket_0.dag() == (pl_state * pl_state.dag()
-                                                   + 1j * min_Y_state * min_Y_state.dag()
-                                                   - 0.5 * (1 + 1j) * ket_0 * ket_0.dag()
-                                                   - 0.5 * (1 + 1j) * ket_1 * ket_1.dag())
+                    alpha_coeffs, states = self._operator_basis_lidar(ket_0, ket_1)
+                    alpha_list.append(alpha_coeffs)
+                    state_list.append(states)
+                    assert ket_0 * ket_1.dag() == sum([alpha_coeffs[i] * states[i] for i in range(len(alpha_coeffs))])
         return alpha_list, state_list, op_basis
 
     def test_cZZU(self):
@@ -277,7 +271,6 @@ class SimulateBosonicOperations:
         a = id_wrap_ops(destroy(cavity_dim), cav_a_idx, truncated_dims)
         b = id_wrap_ops(destroy(cavity_dim), cav_b_idx, truncated_dims)
         sz = id_wrap_ops(sigmaz(), tmon_idx, truncated_dims)
-        chi = 2.0 * np.pi * 0.001
         Fock_states_spec = [
             (i, j, k)
             for i in range(cavity_fock_trunc)
