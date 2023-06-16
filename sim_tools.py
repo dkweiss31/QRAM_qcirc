@@ -142,72 +142,6 @@ class SimulateBosonicOperations:
     def SWAP(self, a_op: Qobj, b_op: Qobj):
         return ((np.pi / 2) * (a_op.dag() * b_op - a_op * b_op.dag())).expm()
 
-    def logical_error_prob(
-        self, U_diss, initial_Fock_states_spec, bad_Fock_states_spec, truncated_dims
-    ):
-        """
-        Parameters
-        ----------
-        U_diss: superoperator propagator
-        initial_Fock_states_spec:
-        bad_Fock_states_spec
-        truncated_dims
-
-        Returns
-        -------
-
-        """
-        initial_basis_list = construct_basis_states_list(
-            initial_Fock_states_spec, truncated_dims
-        )
-        num_initial_states = len(initial_Fock_states_spec)
-        bad_basis_list = construct_basis_states_list(
-            bad_Fock_states_spec, truncated_dims
-        )
-        bad_pop_total = 0.0
-        for i, initial_state in enumerate(initial_basis_list):
-            final_state_vec = U_diss * operator_to_vector(
-                initial_state * initial_state.dag()
-            )
-            final_dm = vector_to_operator(final_state_vec)
-            # assume below that most of the population is in the
-            # correct final state. This corrects for the sum below
-            # which will include the correct final state as a "bad_vec"
-            correct_final_state_pop = np.real(np.max(np.diag(final_dm)))
-            for j, bad_state in enumerate(bad_basis_list):
-                # I think the below is the right way to extract the diagonal element
-                # (that is the probability) but need to think more
-                bad_pop = bad_state.dag() * final_dm * bad_state
-                bad_pop_total += np.real(bad_pop.data.toarray()[0, 0])
-            bad_pop_total = bad_pop_total - correct_final_state_pop
-        return bad_pop_total / num_initial_states
-
-    def gate_failure_prob(
-        self,
-        U_diss,
-        initial_Fock_states_spec,
-        detected_Fock_states_spec,
-        truncated_dims,
-    ):
-        initial_basis_list = construct_basis_states_list(
-            initial_Fock_states_spec, truncated_dims
-        )
-        num_initial_states = len(initial_Fock_states_spec)
-        detected_basis_list = construct_basis_states_list(
-            detected_Fock_states_spec, truncated_dims
-        )
-        detected_pop_total = 0.0
-        for i, initial_state in enumerate(initial_basis_list):
-            final_state_vec = U_diss * operator_to_vector(
-                initial_state * initial_state.dag()
-            )
-            final_dm = vector_to_operator(final_state_vec)
-            for j, detected_state in enumerate(detected_basis_list):
-                detected_pop = detected_state.dag() * final_dm * detected_state
-                #            print(detected_Fock_states_spec[j], detected_pop)
-                detected_pop_total += np.real(detected_pop.data.toarray()[0, 0])
-        return detected_pop_total / num_initial_states
-
     def cZZ_time(self):
         g = np.sqrt(3) * self.chi / 2
         Omega = np.sqrt(g**2 + (self.chi / 2) ** 2)
@@ -227,19 +161,6 @@ class SimulateBosonicOperations:
         U_b = self.R_osc(b_op, -np.pi / 2, c_ops=c_ops)
         return U_a * U_b * U_tmon_y_min * JPP * U_tmon_x * JPP * U_tmon_y
 
-    def epsilon_undid(self, U_eJP, U_eJP_ideal, initial_state):
-        kraus_list = to_kraus(to_super(U_eJP_ideal.dag()) * U_eJP)
-        return (
-            1
-            - initial_state.dag() * kraus_list[0].dag() * kraus_list[0] * initial_state
-        )
-
-    def kraus_list_measure(self, U_diss, measurement_op, initial_rho):
-        new_rho_vec = U_diss * operator_to_vector(initial_rho)
-        prob = np.trace(vector_to_operator(to_super(measurement_op) * new_rho_vec))
-        op_undid_measure = to_super(measurement_op) * U_diss / np.sqrt(prob)
-        return to_kraus(op_undid_measure)
-
     def measurement_channel(self, rho, measurement_op):
         if measurement_op.type == "oper":
             new_rho = measurement_op * rho * measurement_op.dag()
@@ -251,30 +172,6 @@ class SimulateBosonicOperations:
             raise RuntimeError(
                 'measurement_op should be either of type "oper" or "super"'
             )
-
-    def fidelity_kraus(self, superop, ideal_op, keep_idxs):
-        dim = len(keep_idxs)
-        kraus_ops = to_kraus(superop)
-        kraus_m_ops = np.array([ideal_op.dag() * kraus_op for kraus_op in kraus_ops])
-        return (1.0 / (dim * (dim + 1))) * (
-            np.trace(np.sum([kraus_op.dag() * kraus_op for kraus_op in kraus_m_ops]))
-            + np.sum([np.abs(np.trace(kraus_op)) ** 2 for kraus_op in kraus_m_ops])
-        )
-
-    def failure_rate(self, U_real):
-        comp_basis_states, superpos_basis_states, basis_state_labels, super_state_labels = self.state_basis()
-        all_init_states = comp_basis_states + superpos_basis_states
-        failure_rate = 0.0
-        measurement_op = tensor(
-            qeye(self.cavity_dim),
-            qeye(self.cavity_dim),
-            basis(self.tmon_dim, 0) * basis(self.tmon_dim, 0).dag(),
-        )
-        for idx, state in enumerate(all_init_states):
-            rho = operator_to_vector(state * state.dag())
-            propagated_rho = vector_to_operator(U_real * rho)
-            failure_rate += 1 - np.trace(measurement_op * propagated_rho)
-        return failure_rate / len(all_init_states)
     
     def process_fidelity_nielsen(self, entanglement_fidelity, num_qubits=2):
         dim = num_qubits**2
@@ -292,15 +189,12 @@ class SimulateBosonicOperations:
         num_qubits=2,
     ):
         dim = 2**num_qubits
-        op_basis, pauli_keys = self.operator_basis(s_ops_cavs)
-        st_contr = 0.0
+        alpha_list, state_list, op_basis = self.operator_basis_lidar(self.comp_basis_states)
+        overall_contr = 0.0
         total_prob = 0.0
         num_states = 0
         for j, op in enumerate(op_basis):
-            alpha_state_pair = self.decompose_op_into_state_basis(
-                op, pauli_keys[j]
-            )
-            for k, (coeff, pauli_rho, label) in enumerate(alpha_state_pair):
+            for k, (coeff, pauli_rho) in enumerate(zip(alpha_list[j], state_list[j])):
                 rho = operator_to_vector(pauli_rho)
                 propagated_rho = U_real * rho
                 if measurement_op is not None:
@@ -308,7 +202,7 @@ class SimulateBosonicOperations:
                 else:
                     prob = 0.0
                 propagated_rho = vector_to_operator(propagated_rho)
-                total_prob += np.abs(coeff) * prob
+                total_prob += prob
                 if ptrace_idxs is not None:
                     propagated_rho = propagated_rho.ptrace(ptrace_idxs)
                     op = op.ptrace(ptrace_idxs)
@@ -316,71 +210,61 @@ class SimulateBosonicOperations:
                     propagated_rho, Fock_states_spec, truncated_dims
                 )
                 projected_op = project_U(op, Fock_states_spec, truncated_dims)
-                st_contr += coeff * np.trace(
+                state_contr = coeff * np.trace(
                     U_ideal * projected_op.dag() * U_ideal.dag() * projected_rho
                 )
+                overall_contr += state_contr
                 num_states += 1
-        return st_contr / dim**3, total_prob / num_states
+#       Nielsen formula for an orthogonal basis that obeys tr(U_{j}^dag U_{k}) = delta_{jk}
+#       (as opposed to dim delta_{jk} has one less factor of dim in the denominator
+        return overall_contr / dim**2, total_prob / num_states
 
-    def state_basis(self):
-        superpos_states = []
-        basis_state_labels = ["|00>", "|01>", "|10>", "|11>"]
-        super_state_labels = []
-        for i, comp_bas_state_1 in enumerate(self.comp_basis_states):
-            for j, comp_bas_state_2 in enumerate(self.comp_basis_states):
+    def DR_basis(self):
+        # express logical DR states in terms of the basis states of the cavities
+        # basis states originally in |router, input, tmon=0>
+        # ordered as router, input, router, input
+        # |00>_{L} = |10>_{r}|10>_{i} --> |1>_{r}|1>_{i}|0>_{r}|0>_{i}
+        # |01>_{L} = |10>|01> --> |1>|0>|0>|1>
+        # |10>_{L} = |01>|10> --> |0>|1>|1>|0>
+        # |11>_{L} = |01>|01> --> |0>|0>|1>|1>
+        SR_comp_bas_states = self.comp_basis_states
+        basis_state_DR = [tensor(SR_comp_bas_states[3], SR_comp_bas_states[0]),
+                          tensor(SR_comp_bas_states[2], SR_comp_bas_states[1]),
+                          tensor(SR_comp_bas_states[1], SR_comp_bas_states[2]),
+                          tensor(SR_comp_bas_states[0], SR_comp_bas_states[3])]
+        return basis_state_DR
+
+    def operator_basis_lidar(self, basis_states):
+        op_basis = [state * state.dag() for state in basis_states]
+        alpha_list = [(1.0,), (1.0,), (1.0,), (1.0,)]
+        state_list = [(state * state.dag(),) for state in basis_states]
+        for i, ket_0 in enumerate(basis_states):
+            for j, ket_1 in enumerate(basis_states):
                 if j > i:
-                    superpos_states.append((comp_bas_state_1 + comp_bas_state_2).unit())
-                    superpos_states.append((comp_bas_state_1 - comp_bas_state_2).unit())
-                    superpos_states.append(
-                        (comp_bas_state_1 + 1j * comp_bas_state_2).unit()
-                    )
-                    superpos_states.append(
-                        (comp_bas_state_1 - 1j * comp_bas_state_2).unit()
-                    )
-                    super_state_labels.append(basis_state_labels[i] + " + " + basis_state_labels[j])
-                    super_state_labels.append(basis_state_labels[i] + " - " + basis_state_labels[j])
-                    super_state_labels.append(basis_state_labels[i] + " +i " + basis_state_labels[j])
-                    super_state_labels.append(basis_state_labels[i] + " -i " + basis_state_labels[j])
-        return self.comp_basis_states, superpos_states, basis_state_labels, super_state_labels
-
-    def decompose_op_into_state_basis(self, op, pauli_key):
-        """given an operator, decompose it in terms of density matrices"""
-        comp_basis_states, superpos_basis_states, basis_state_labels, super_state_labels = self.state_basis()
-        if "X" not in pauli_key and "Y" not in pauli_key:
-            basis_states = comp_basis_states
-            labels = basis_state_labels
-        else:
-            basis_states = comp_basis_states + superpos_basis_states
-            labels = basis_state_labels + super_state_labels
-        st_rho = [state * state.dag() for state in basis_states]
-        alpha_coeffs = np.array([np.trace(rho * op) for rho in st_rho])
-        # test that we actually have decomposed the operator into 
-        # a sum over density matrices
-        assert sum([alpha_coeffs[i] * rho for i, rho in enumerate(st_rho)]) == op
-        alpha_state_label_triplet = [
-            (alpha_coeffs[i], state, labels[i])
-            for i, state in enumerate(st_rho)
-            if alpha_coeffs[i] != 0
-        ]
-        return alpha_state_label_triplet
-
-    def operator_basis(self, s_ops_cavs):
-        id_cav, sx_cav, sy_cav, sz_cav = s_ops_cavs
-        ops = {"I": id_cav, "X": sx_cav, "Y": sy_cav, "Z": sz_cav}
-        pauli_ops = []
-        pauli_keys = []
-        for key_a in ops.keys():
-            for key_b in ops.keys():
-                # start with the tmon in the ground state
-                pauli_ops.append(
-                    tensor(
-                        ops[key_a],
-                        ops[key_b],
-                        basis(self.tmon_dim, 0) * basis(self.tmon_dim, 0).dag(),
-                    )
-                )
-                pauli_keys.append(key_a + key_b)
-        return pauli_ops, pauli_keys
+                    op_basis.append(ket_0 * ket_1.dag())
+                    op_basis.append(ket_1 * ket_0.dag())
+                    alpha_list.append((1, 1j, -0.5 * (1 + 1j), -0.5 * (1 + 1j)))
+                    alpha_list.append((1, 1j, -0.5 * (1 + 1j), -0.5 * (1 + 1j)))
+                    pl_state = (ket_0 + ket_1).unit()
+                    pl_Y_state = (ket_0 + 1j * ket_1).unit()
+                    min_Y_state = (1j * ket_0 + ket_1).unit()
+                    state_list.append((pl_state * pl_state.dag(),
+                                       pl_Y_state * pl_Y_state.dag(),
+                                       ket_0 * ket_0.dag(),
+                                       ket_1 * ket_1.dag(),))
+                    state_list.append((pl_state * pl_state.dag(),
+                                       min_Y_state * min_Y_state.dag(),
+                                       ket_0 * ket_0.dag(),
+                                       ket_1 * ket_1.dag(),))
+                    assert ket_0 * ket_1.dag() == (pl_state * pl_state.dag()
+                                                   + 1j * pl_Y_state * pl_Y_state.dag()
+                                                   - 0.5 * (1 + 1j) * ket_0 * ket_0.dag()
+                                                   - 0.5 * (1 + 1j) * ket_1 * ket_1.dag())
+                    assert ket_1 * ket_0.dag() == (pl_state * pl_state.dag()
+                                                   + 1j * min_Y_state * min_Y_state.dag()
+                                                   - 0.5 * (1 + 1j) * ket_0 * ket_0.dag()
+                                                   - 0.5 * (1 + 1j) * ket_1 * ket_1.dag())
+        return alpha_list, state_list, op_basis
 
     def test_cZZU(self):
         tmon_dim = 2
