@@ -17,12 +17,11 @@ from utils import id_wrap_ops, project_U
 class SimulateBosonicOperations:
     """
     """
-    def __init__(self, sx, sy, sz, chi, comp_basis_states, tmon_dim, cavity_dim):
+    def __init__(self, sx, sy, sz, chi, tmon_dim, cavity_dim):
         self.sx = sx
         self.sy = sy
         self.sz = sz
         self.chi = chi
-        self.comp_basis_states = comp_basis_states
         self.tmon_dim = tmon_dim
         self.cavity_dim = cavity_dim
 
@@ -161,78 +160,45 @@ class SimulateBosonicOperations:
         U_b = self.R_osc(b_op, -np.pi / 2, c_ops=c_ops)
         return U_a * U_b * U_tmon_y_min * JPP * U_tmon_x * JPP * U_tmon_y
 
-    @staticmethod
-    def measurement_channel(rho, measurement_op):
-        if measurement_op.type == "oper":
-            new_rho = measurement_op * rho * measurement_op.dag()
-            return new_rho, np.trace(new_rho)
-        elif measurement_op.type == "super":
-            new_rho = measurement_op * rho
-            return new_rho, np.trace(vector_to_operator(new_rho))
-        else:
-            raise RuntimeError(
-                'measurement_op should be either of type "oper" or "super"'
-            )
-    
-    @staticmethod
-    def process_fidelity_nielsen(entanglement_fidelity, num_qubits=2):
-        dim = num_qubits**2
-        return (dim * entanglement_fidelity + 1) / (dim + 1)
+    def U_erasure_check(self, a_op: Qobj, b_op: Qobj, params, c_ops=None):
+        (tmon_d_strength, _) = params
+        tmon_d_time = np.pi / (2 * tmon_d_strength)
+        JPP = self.cZZU(a_op, b_op, c_ops=c_ops)
+        U_tmon_y = self.R_tmon(tmon_d_strength, tmon_d_time, direction="Y", c_ops=c_ops)
+        U_a = self.R_osc(a_op, np.pi / 2, c_ops=c_ops)
+        U_b = self.R_osc(b_op, np.pi / 2, c_ops=c_ops)
+        return U_tmon_y * U_a * U_b * JPP * U_tmon_y
 
-    def entanglement_fidelity_nielsen(
-        self,
-        U_real,
-        U_ideal,
-        basis_states,
-        measurement_op=None,
-        ptrace_idxs=None,
-        num_qubits=2,
-    ):
-        dim = 2**num_qubits
-        alpha_list, state_list, op_basis = self.operator_basis_lidar(basis_states=basis_states)
-        overall_contr = 0.0
-        total_prob = 0.0
-        num_states = 0
-        for j, op in enumerate(op_basis):
-            for k, (coeff, pauli_rho) in enumerate(zip(alpha_list[j], state_list[j])):
-                rho = operator_to_vector(pauli_rho)
-                propagated_rho = U_real * rho
-                if measurement_op is not None:
-                    propagated_rho, prob = self.measurement_channel(propagated_rho, measurement_op)
-                else:
-                    prob = 0.0
-                propagated_rho = vector_to_operator(propagated_rho)
-                total_prob += prob
-                if ptrace_idxs is not None:
-                    propagated_rho = propagated_rho.ptrace(ptrace_idxs)
-                    op = op.ptrace(ptrace_idxs)
-                projected_rho = project_U(
-                    propagated_rho, basis_states=basis_states
-                )
-                projected_op = project_U(op, basis_states=basis_states)
-                state_contr = coeff * np.trace(
-                    U_ideal * projected_op.dag() * U_ideal.dag() * projected_rho
-                )
-                overall_contr += state_contr
-                num_states += 1
-#       Nielsen formula for an orthogonal basis that obeys tr(U_{j}^dag U_{k}) = delta_{jk}
-#       (as opposed to dim delta_{jk} has one less factor of dim in the denominator
-        return overall_contr / dim**2, total_prob / num_states
+    def test_cZZU(self):
+        tmon_dim = 2
+        cavity_dim = 3
+        cav_a_idx = 0
+        cav_b_idx = 1
+        tmon_idx = 2
+        truncated_dims = [cavity_dim, cavity_dim, tmon_dim]
+        cavity_fock_trunc = 2
+        a = id_wrap_ops(destroy(cavity_dim), cav_a_idx, truncated_dims)
+        b = id_wrap_ops(destroy(cavity_dim), cav_b_idx, truncated_dims)
+        sz = id_wrap_ops(sigmaz(), tmon_idx, truncated_dims)
+        Fock_states_spec = [
+            (i, j, k)
+            for i in range(cavity_fock_trunc)
+            for j in range(cavity_fock_trunc)
+            for k in range(2)
+        ]
+        cZZU_projected = project_U(
+            self.cZZU(a, b), Fock_states_spec, truncated_dims
+        )
+        ideal_cZZU = (-1j * (np.pi / 2) * sz * (a.dag() * a + b.dag() * b)).expm()
+        ideal_cZZU_projected = project_U(
+            ideal_cZZU, Fock_states_spec, truncated_dims
+        )
+        assert ideal_cZZU_projected == cZZU_projected
 
-    def DR_basis(self):
-        # express logical DR states in terms of the basis states of the cavities
-        # basis states originally in |router, input, tmon=0>
-        # ordered as router, input, router, input
-        # |00>_{L} = |10>_{r}|10>_{i} --> |1>_{r}|1>_{i}|0>_{r}|0>_{i}
-        # |01>_{L} = |10>|01> --> |1>|0>|0>|1>
-        # |10>_{L} = |01>|10> --> |0>|1>|1>|0>
-        # |11>_{L} = |01>|01> --> |0>|0>|1>|1>
-        SR_comp_bas_states = self.comp_basis_states
-        basis_state_DR = [tensor(SR_comp_bas_states[3], SR_comp_bas_states[0]),
-                          tensor(SR_comp_bas_states[2], SR_comp_bas_states[1]),
-                          tensor(SR_comp_bas_states[1], SR_comp_bas_states[2]),
-                          tensor(SR_comp_bas_states[0], SR_comp_bas_states[3])]
-        return basis_state_DR
+
+class FidelityBosonicOperations:
+    def __init__(self, comp_basis_states):
+        self.comp_basis_states = comp_basis_states
 
     @staticmethod
     def _operator_basis_lidar(ket_0, ket_1):
@@ -260,28 +226,60 @@ class SimulateBosonicOperations:
                     assert ket_0 * ket_1.dag() == sum([alpha_coeffs[i] * states[i] for i in range(len(alpha_coeffs))])
         return alpha_list, state_list, op_basis
 
-    def test_cZZU(self):
-        tmon_dim = 2
-        cavity_dim = 3
-        cav_a_idx = 0
-        cav_b_idx = 1
-        tmon_idx = 2
-        truncated_dims = [cavity_dim, cavity_dim, tmon_dim]
-        cavity_fock_trunc = 2
-        a = id_wrap_ops(destroy(cavity_dim), cav_a_idx, truncated_dims)
-        b = id_wrap_ops(destroy(cavity_dim), cav_b_idx, truncated_dims)
-        sz = id_wrap_ops(sigmaz(), tmon_idx, truncated_dims)
-        Fock_states_spec = [
-            (i, j, k)
-            for i in range(cavity_fock_trunc)
-            for j in range(cavity_fock_trunc)
-            for k in range(2)
-        ]
-        cZZU_projected = project_U(
-            self.cZZU(a, b), Fock_states_spec, truncated_dims
-        )
-        ideal_cZZU = (-1j * (np.pi / 2) * sz * (a.dag() * a + b.dag() * b)).expm()
-        ideal_cZZU_projected = project_U(
-            ideal_cZZU, Fock_states_spec, truncated_dims
-        )
-        assert ideal_cZZU_projected == cZZU_projected
+    @staticmethod
+    def measurement_channel(rho, measurement_op):
+        if measurement_op.type == "oper":
+            new_rho = measurement_op * rho * measurement_op.dag()
+            return new_rho, np.trace(new_rho)
+        elif measurement_op.type == "super":
+            new_rho = measurement_op * rho
+            return new_rho, np.trace(vector_to_operator(new_rho))
+        else:
+            raise RuntimeError(
+                'measurement_op should be either of type "oper" or "super"'
+            )
+
+    @staticmethod
+    def process_fidelity_nielsen(entanglement_fidelity, num_qubits=2):
+        dim = num_qubits ** 2
+        return (dim * entanglement_fidelity + 1) / (dim + 1)
+
+    def entanglement_fidelity_nielsen(
+            self,
+            U_real,
+            U_ideal,
+            basis_states,
+            measurement_op=None,
+            ptrace_idxs=None,
+            num_qubits=2,
+    ):
+        dim = 2 ** num_qubits
+        alpha_list, state_list, op_basis = self.operator_basis_lidar(basis_states=basis_states)
+        overall_contr = 0.0
+        total_prob = 0.0
+        num_states = 0
+        for j, op in enumerate(op_basis):
+            for k, (coeff, pauli_rho) in enumerate(zip(alpha_list[j], state_list[j])):
+                rho = operator_to_vector(pauli_rho)
+                propagated_rho = U_real * rho
+                if measurement_op is not None:
+                    propagated_rho, prob = self.measurement_channel(propagated_rho, measurement_op)
+                else:
+                    prob = 0.0
+                propagated_rho = vector_to_operator(propagated_rho)
+                total_prob += prob
+                if ptrace_idxs is not None:
+                    propagated_rho = propagated_rho.ptrace(ptrace_idxs)
+                    op = op.ptrace(ptrace_idxs)
+                projected_rho = project_U(
+                    propagated_rho, basis_states=basis_states
+                )
+                projected_op = project_U(op, basis_states=basis_states)
+                state_contr = coeff * np.trace(
+                    U_ideal * projected_op.dag() * U_ideal.dag() * projected_rho
+                )
+                overall_contr += state_contr
+                num_states += 1
+        #       Nielsen formula for an orthogonal basis that obeys tr(U_{j}^dag U_{k}) = delta_{jk}
+        #       (as opposed to dim delta_{jk} has one less factor of dim in the denominator
+        return overall_contr / dim ** 2, total_prob / num_states
