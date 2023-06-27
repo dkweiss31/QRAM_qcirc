@@ -1,5 +1,8 @@
 from qutip import tensor, Qobj, basis, qeye, to_kraus, sigmax, sigmay, sigmaz
 import numpy as np
+import os
+import glob
+import re
 
 
 def id_wrap_ops(op: Qobj, idx: int, truncated_dims: list):
@@ -10,6 +13,8 @@ def id_wrap_ops(op: Qobj, idx: int, truncated_dims: list):
 
 
 def construct_basis_states_list(Fock_states_spec: list, truncated_dims: list):
+    if type(truncated_dims) == int:
+        return [basis(truncated_dims, Fock_states_spec), ]
     basis_states = []
     for state_spec in Fock_states_spec:
         basis_list = [
@@ -102,3 +107,20 @@ def my_to_chi(q_oper):
 
 def calc_fidel_chi(chi_real, chi_ideal):
     return (4 * np.trace(chi_real @ chi_ideal) + np.trace(chi_real)) / 5
+
+
+def generate_file_path(extension, file_name, path):
+    # Ensure the path exists.
+    os.makedirs(path, exist_ok=True)
+
+    # Create a save file name based on the one given; ensure it will
+    # not conflict with others in the directory.
+    max_numeric_prefix = -1
+    for file_name_ in glob.glob(os.path.join(path, "*")):
+        if f"_{file_name}.{extension}" in file_name_:
+            numeric_prefix = int(re.match(r"(\d+)_", os.path.basename(file_name_)).group(1))
+            max_numeric_prefix = max(numeric_prefix, max_numeric_prefix)
+
+    # Generate the file path.
+    file_path = os.path.join(path, f"{str(max_numeric_prefix + 1).zfill(5)}_{file_name}.{extension}")
+    return file_path
