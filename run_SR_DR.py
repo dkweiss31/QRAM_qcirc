@@ -3,8 +3,7 @@ from sim_tools import SimulateBosonicOperations, FidelityBosonicOperations
 from utils import (
     id_wrap_ops,
     construct_basis_states_list,
-    project_U,
-    generate_file_path,
+    project_U, generate_file_path,
 )
 import numpy as np
 import h5py
@@ -98,6 +97,7 @@ def main(filepath, param_dict):
 # example call
 if __name__ == "__main__":
     directory = "out"
+    filepath = generate_file_path("h5py", "entangle_fidel_SR_DR", directory)
     param_dict = {
         "tmon_dim": 3,
         "cavity_dim": 2,
@@ -114,5 +114,6 @@ if __name__ == "__main__":
         "Gamma_1_res": 1.0 / (600 * 10**3),
         "Gamma_phi_res": 1.0 / (5000 * 10**3),
         "nth": 0.01,
+        "postselection": True,
     }
-    main(directory, param_dict)
+    main(filepath, param_dict)
