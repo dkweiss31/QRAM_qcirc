@@ -10,15 +10,16 @@ from qutip import (
     sigmaz,
     destroy,
     liouvillian,
-    to_super, qeye,
+    to_super,
+    qeye,
 )
 import numpy as np
 from utils import id_wrap_ops, project_U, construct_basis_states_list
 
 
 class SimulateBosonicOperations:
-    """
-    """
+    """ """
+
     def __init__(self, gf_tmon=True, tmon_dim=3, cavity_dim=3):
         self.gf_tmon = gf_tmon
         self.tmon_dim = tmon_dim
@@ -40,42 +41,70 @@ class SimulateBosonicOperations:
 
     def s_ops_gi_tmon(self, i):
         """construct gi tmon where i can be e or f"""
-        sx_gi = (basis(self.tmon_dim, 0) * basis(self.tmon_dim, i).dag()
-                 + basis(self.tmon_dim, i) * basis(self.tmon_dim, 0).dag())
-        sy_gi = (-1j * basis(self.tmon_dim, 0) * basis(self.tmon_dim, i).dag()
-                 + 1j * basis(self.tmon_dim, i) * basis(self.tmon_dim, 0).dag())
-        sz_gi = (basis(self.tmon_dim, 0) * basis(self.tmon_dim, 0).dag()
-                 - basis(self.tmon_dim, i) * basis(self.tmon_dim, i).dag())
+        sx_gi = (
+            basis(self.tmon_dim, 0) * basis(self.tmon_dim, i).dag()
+            + basis(self.tmon_dim, i) * basis(self.tmon_dim, 0).dag()
+        )
+        sy_gi = (
+            -1j * basis(self.tmon_dim, 0) * basis(self.tmon_dim, i).dag()
+            + 1j * basis(self.tmon_dim, i) * basis(self.tmon_dim, 0).dag()
+        )
+        sz_gi = (
+            basis(self.tmon_dim, 0) * basis(self.tmon_dim, 0).dag()
+            - basis(self.tmon_dim, i) * basis(self.tmon_dim, i).dag()
+        )
         # below assumes that tmon is in position 2 (zero indexed) in truncated_dims
         tmon_idx = 2
         self.sx = id_wrap_ops(sx_gi, tmon_idx, self.truncated_dims)
         self.sy = id_wrap_ops(sy_gi, tmon_idx, self.truncated_dims)
         self.sz = id_wrap_ops(sz_gi, tmon_idx, self.truncated_dims)
         # define below ops for collapse operators
-        self.sminus_ge = id_wrap_ops(basis(3, 0) * basis(3, 1).dag(), tmon_idx, self.truncated_dims)
-        self.s_gg = id_wrap_ops(basis(3, 0) * basis(3, 0).dag(), tmon_idx, self.truncated_dims)
-        self.s_ee = id_wrap_ops(basis(3, 1) * basis(3, 1).dag(), tmon_idx, self.truncated_dims)
+        self.sminus_ge = id_wrap_ops(
+            basis(3, 0) * basis(3, 1).dag(), tmon_idx, self.truncated_dims
+        )
+        self.s_gg = id_wrap_ops(
+            basis(3, 0) * basis(3, 0).dag(), tmon_idx, self.truncated_dims
+        )
+        self.s_ee = id_wrap_ops(
+            basis(3, 1) * basis(3, 1).dag(), tmon_idx, self.truncated_dims
+        )
         if i == 2:
-            self.sminus_ef = id_wrap_ops(basis(3, 1) * basis(3, 2).dag(), tmon_idx, self.truncated_dims)
-            self.s_ff = id_wrap_ops(basis(3, 2) * basis(3, 2).dag(), tmon_idx, self.truncated_dims)
+            self.sminus_ef = id_wrap_ops(
+                basis(3, 1) * basis(3, 2).dag(), tmon_idx, self.truncated_dims
+            )
+            self.s_ff = id_wrap_ops(
+                basis(3, 2) * basis(3, 2).dag(), tmon_idx, self.truncated_dims
+            )
 
-    def construct_c_ops(self, a: Qobj, b: Qobj, Gamma_1_ge=0.0, Gamma_1_ef=0.0, Gamma_phi_gg=0.0,
-                        Gamma_phi_ee=0.0, Gamma_phi_ff=0.0, Gamma_1_res=0.0,
-                        Gamma_phi_res=0.0, nth=0.0, **kwargs):
-        c_ops = [np.sqrt(Gamma_1_ge) * self.sminus_ge,
-                 np.sqrt(Gamma_1_ef) * self.sminus_ef,
-                 np.sqrt(nth * Gamma_1_ge) * self.sminus_ge.dag(),
-                 np.sqrt(nth * Gamma_1_ef) * self.sminus_ef.dag(),
-                 np.sqrt(Gamma_phi_gg) * self.s_gg,
-                 np.sqrt(Gamma_phi_ee) * self.s_ee,
-                 np.sqrt(Gamma_phi_ff) * self.s_ff,
-                 np.sqrt(Gamma_1_res) * a,
-                 np.sqrt(Gamma_1_res) * b,
-                 np.sqrt(nth * Gamma_1_res) * a.dag(),
-                 np.sqrt(nth * Gamma_1_res) * b.dag(),
-                 np.sqrt(Gamma_phi_res) * a.dag() * a,
-                 np.sqrt(Gamma_phi_res) * b.dag() * b,
-                 ]
+    def construct_c_ops(
+        self,
+        a: Qobj,
+        b: Qobj,
+        Gamma_1_ge=0.0,
+        Gamma_1_ef=0.0,
+        Gamma_phi_gg=0.0,
+        Gamma_phi_ee=0.0,
+        Gamma_phi_ff=0.0,
+        Gamma_1_res=0.0,
+        Gamma_phi_res=0.0,
+        nth=0.0,
+        **kwargs
+    ):
+        c_ops = [
+            np.sqrt(Gamma_1_ge) * self.sminus_ge,
+            np.sqrt(Gamma_1_ef) * self.sminus_ef,
+            np.sqrt(nth * Gamma_1_ge) * self.sminus_ge.dag(),
+            np.sqrt(nth * Gamma_1_ef) * self.sminus_ef.dag(),
+            np.sqrt(Gamma_phi_gg) * self.s_gg,
+            np.sqrt(Gamma_phi_ee) * self.s_ee,
+            np.sqrt(Gamma_phi_ff) * self.s_ff,
+            np.sqrt(Gamma_1_res) * a,
+            np.sqrt(Gamma_1_res) * b,
+            np.sqrt(nth * Gamma_1_res) * a.dag(),
+            np.sqrt(nth * Gamma_1_res) * b.dag(),
+            np.sqrt(Gamma_phi_res) * a.dag() * a,
+            np.sqrt(Gamma_phi_res) * b.dag() * b,
+        ]
         return c_ops
 
     def cZZU(self, a_op: Qobj, b_op: Qobj, chi: float, c_ops: List[Qobj] = None):
@@ -125,7 +154,9 @@ class SimulateBosonicOperations:
             return cav_rotation
         return to_super(cav_rotation)
 
-    def R_tmon(self, g: float, t: float, direction: str = "X", c_ops: List[Qobj] = None):
+    def R_tmon(
+        self, g: float, t: float, direction: str = "X", c_ops: List[Qobj] = None
+    ):
         r"""
         Parameters
         ----------
@@ -224,20 +255,26 @@ class SimulateBosonicOperations:
 
     def measurement_op_tmon_projector(self, idx):
         """project onto a specific tmon eigenstate"""
-        Fock_states_spec = [(i, j, idx) for i in range(self.cavity_dim)
-                            for j in range(self.cavity_dim)]
+        Fock_states_spec = [
+            (i, j, idx) for i in range(self.cavity_dim) for j in range(self.cavity_dim)
+        ]
         Fock_states = construct_basis_states_list(Fock_states_spec, self.truncated_dims)
         return sum([Fock_state * Fock_state.dag() for Fock_state in Fock_states])
 
     def measurement_op_DR_parity(self):
         measurement_op = 0.0
         for idx in range(self.tmon_dim):
-            Fock_states_spec = [(i, j, idx) for i in range(2)
-                                for j in range(2)]
-            Fock_states = construct_basis_states_list(Fock_states_spec, self.truncated_dims)
+            Fock_states_spec = [(i, j, idx) for i in range(2) for j in range(2)]
+            Fock_states = construct_basis_states_list(
+                Fock_states_spec, self.truncated_dims
+            )
             Fock_states_DR = self.DR_basis(Fock_states)
-            measurement_op += sum([detected_state * detected_state.dag()
-                                   for detected_state in Fock_states_DR])
+            measurement_op += sum(
+                [
+                    detected_state * detected_state.dag()
+                    for detected_state in Fock_states_DR
+                ]
+            )
         return measurement_op
 
     @staticmethod
@@ -278,10 +315,12 @@ class SimulateBosonicOperations:
         # |01>_{L} = |10>|01> --> |1>|0>|0>|1>
         # |10>_{L} = |01>|10> --> |0>|1>|1>|0>
         # |11>_{L} = |01>|01> --> |0>|0>|1>|1>
-        basis_state_DR = [tensor(SR_comp_bas_states[3], SR_comp_bas_states[0]),
-                          tensor(SR_comp_bas_states[2], SR_comp_bas_states[1]),
-                          tensor(SR_comp_bas_states[1], SR_comp_bas_states[2]),
-                          tensor(SR_comp_bas_states[0], SR_comp_bas_states[3])]
+        basis_state_DR = [
+            tensor(SR_comp_bas_states[3], SR_comp_bas_states[0]),
+            tensor(SR_comp_bas_states[2], SR_comp_bas_states[1]),
+            tensor(SR_comp_bas_states[1], SR_comp_bas_states[2]),
+            tensor(SR_comp_bas_states[0], SR_comp_bas_states[3]),
+        ]
         return basis_state_DR
 
     def test_cZZU(self):
@@ -306,9 +345,7 @@ class SimulateBosonicOperations:
             self.cZZU(a, b, chi), Fock_states_spec, truncated_dims
         )
         ideal_cZZU = (-1j * (np.pi / 2) * sz * (a.dag() * a + b.dag() * b)).expm()
-        ideal_cZZU_projected = project_U(
-            ideal_cZZU, Fock_states_spec, truncated_dims
-        )
+        ideal_cZZU_projected = project_U(ideal_cZZU, Fock_states_spec, truncated_dims)
         assert ideal_cZZU_projected == cZZU_projected
 
 
@@ -320,9 +357,15 @@ class FidelityBosonicOperations:
     def _operator_basis_lidar(ket_0, ket_1):
         pl_state = (ket_0 + ket_1).unit()
         min_state = (ket_0 + 1j * ket_1).unit()
-        return ((1, 1j, -0.5 * (1 + 1j), -0.5 * (1 + 1j)),
-                (pl_state * pl_state.dag(), min_state * min_state.dag(),
-                ket_0 * ket_0.dag(), ket_1 * ket_1.dag()))
+        return (
+            (1, 1j, -0.5 * (1 + 1j), -0.5 * (1 + 1j)),
+            (
+                pl_state * pl_state.dag(),
+                min_state * min_state.dag(),
+                ket_0 * ket_0.dag(),
+                ket_1 * ket_1.dag(),
+            ),
+        )
 
     def operator_basis_lidar(self, basis_states=None):
         if basis_states is None:
@@ -339,7 +382,9 @@ class FidelityBosonicOperations:
                     alpha_coeffs, states = self._operator_basis_lidar(ket_0, ket_1)
                     alpha_list.append(alpha_coeffs)
                     state_list.append(states)
-                    assert ket_0 * ket_1.dag() == sum([alpha_coeffs[i] * states[i] for i in range(len(alpha_coeffs))])
+                    assert ket_0 * ket_1.dag() == sum(
+                        [alpha_coeffs[i] * states[i] for i in range(len(alpha_coeffs))]
+                    )
         return alpha_list, state_list, op_basis
 
     @staticmethod
@@ -357,20 +402,22 @@ class FidelityBosonicOperations:
 
     @staticmethod
     def process_fidelity_nielsen(entanglement_fidelity, num_qubits=2):
-        dim = num_qubits ** 2
+        dim = num_qubits**2
         return (dim * entanglement_fidelity + 1) / (dim + 1)
 
     def entanglement_fidelity_nielsen(
-            self,
-            U_real,
-            U_ideal,
-            basis_states,
-            measurement_op=None,
-            ptrace_idxs=None,
-            num_qubits=2,
+        self,
+        U_real,
+        U_ideal,
+        basis_states,
+        measurement_op=None,
+        ptrace_idxs=None,
+        num_qubits=2,
     ):
-        dim = 2 ** num_qubits
-        alpha_list, state_list, op_basis = self.operator_basis_lidar(basis_states=basis_states)
+        dim = 2**num_qubits
+        alpha_list, state_list, op_basis = self.operator_basis_lidar(
+            basis_states=basis_states
+        )
         overall_contr = 0.0
         total_prob = 0.0
         num_states = 0
@@ -379,7 +426,9 @@ class FidelityBosonicOperations:
                 rho = operator_to_vector(pauli_rho)
                 propagated_rho = U_real * rho
                 if measurement_op is not None:
-                    propagated_rho, prob = self.measurement_channel(propagated_rho, measurement_op)
+                    propagated_rho, prob = self.measurement_channel(
+                        propagated_rho, measurement_op
+                    )
                 else:
                     prob = 0.0
                 propagated_rho = vector_to_operator(propagated_rho)
@@ -387,9 +436,7 @@ class FidelityBosonicOperations:
                 if ptrace_idxs is not None:
                     propagated_rho = propagated_rho.ptrace(ptrace_idxs)
                     op = op.ptrace(ptrace_idxs)
-                projected_rho = project_U(
-                    propagated_rho, basis_states=basis_states
-                )
+                projected_rho = project_U(propagated_rho, basis_states=basis_states)
                 projected_op = project_U(op, basis_states=basis_states)
                 state_contr = coeff * np.trace(
                     U_ideal * projected_op.dag() * U_ideal.dag() * projected_rho
@@ -398,4 +445,4 @@ class FidelityBosonicOperations:
                 num_states += 1
         #       Nielsen formula for an orthogonal basis that obeys tr(U_{j}^dag U_{k}) = delta_{jk}
         #       (as opposed to dim delta_{jk} has one less factor of dim in the denominator
-        return overall_contr / dim ** 2, total_prob / num_states
+        return overall_contr / dim**2, total_prob / num_states
