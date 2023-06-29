@@ -107,7 +107,7 @@ class SimulateBosonicOperations:
         ]
         return c_ops
 
-    def cZZU(self, a_op: Qobj, b_op: Qobj, chi: float, c_ops: List[Qobj] = None):
+    def cZZU(self, a_op: Qobj, b_op: Qobj, chi: float, c_ops: List[Qobj] = None, traj: bool = False):
         """
         Parameters
         ----------
@@ -129,10 +129,10 @@ class SimulateBosonicOperations:
         )
         Omega = np.sqrt(g**2 + (chi / 2) ** 2)
         t = 2.0 * np.pi / Omega
-        return self._propagator(H, t, c_ops=c_ops)
+        return self._propagator(H, t, c_ops=c_ops, traj=traj)
 
     @staticmethod
-    def R_osc(a_op: Qobj, phi: float, c_ops: List[Qobj] = None):
+    def R_osc(a_op: Qobj, phi: float, c_ops: List[Qobj] = None, traj: bool = False):
         """
         this gate is done in software and thus can be done with unit fidelity
         (hence why the collapse operators are not used even in the case when they are passed)
@@ -150,12 +150,12 @@ class SimulateBosonicOperations:
         propagator corresponding to a single-cavity rotation
         """
         cav_rotation = (-1j * phi * a_op.dag() * a_op).expm()
-        if c_ops is None:
-            return cav_rotation
-        return to_super(cav_rotation)
+        if c_ops is not None and traj is False:
+            return to_super(cav_rotation)
+        return cav_rotation
 
     def R_tmon(
-        self, g: float, t: float, direction: str = "X", c_ops: List[Qobj] = None
+        self, g: float, t: float, direction: str = "X", c_ops: List[Qobj] = None, traj:bool = False
     ):
         r"""
         Parameters
@@ -181,10 +181,10 @@ class SimulateBosonicOperations:
             s_op = self.sz
         else:
             raise RuntimeError("specified direction must be 'X', 'Y', or 'Z'")
-        return self._propagator(0.5 * g * s_op, t, c_ops=c_ops)
+        return self._propagator(0.5 * g * s_op, t, c_ops=c_ops, traj=traj)
 
     @staticmethod
-    def _propagator(H: Qobj, t: float, c_ops: List[Qobj] = None):
+    def _propagator(H: Qobj, t: float, c_ops: List[Qobj] = None, traj: bool = False):
         """
         Parameters
         ----------
@@ -204,6 +204,9 @@ class SimulateBosonicOperations:
         """
         if c_ops is None:
             return (-1j * H * t).expm()
+        elif traj:
+            Heff = H - 0.5 * 1j * sum([c_op.dag() * c_op for c_op in c_ops])
+            return (-1j * Heff * t).expm()
         return (liouvillian(H, c_ops) * t).expm()
 
     def beamsplitter(self, a_op: Qobj, b_op: Qobj, g: float, t: float, c_ops=None):
