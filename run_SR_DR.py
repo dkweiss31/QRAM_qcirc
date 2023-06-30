@@ -41,50 +41,52 @@ def main(filepath, param_dict):
         + np.sqrt(eta_gf) * bosonic_sim.measurement_op_tmon_projector(2)
     )
 
-    # ideal case, no dissipation
+    # # ideal case, no dissipation
     U_eJP_ideal_SR = bosonic_sim.U_eJP_func(a, b, params)
     U_eJP_ideal_DR = tensor(U_eJP_ideal_SR, U_eJP_ideal_SR)
     projected_ideal_SR = project_U(U_eJP_ideal_SR, basis_states=g_comp_basis_states)
     projected_ideal_DR = project_U(U_eJP_ideal_DR, basis_states=g_comp_basis_states_DR)
 
-    # construct the single-rail superoperator
+    # # construct the single-rail superoperator
     c_ops = bosonic_sim.construct_c_ops(a, b, **param_dict)
-    U_eJP = bosonic_sim.U_eJP_func(a, b, params, c_ops)
-
-    # for dual rail tensor together the two superoperators then reorder appropriately
-    U_eJP_DR = tensor(U_eJP, U_eJP)
-    DR_dims = to_super(U_eJP_ideal_DR).dims
-    V2 = bosonic_sim.V_2_op()
-    U_eJP_DR_V2 = Qobj(V2.dag().data @ U_eJP_DR.data @ V2.data, dims=DR_dims)
+    # maybe here want to actually apply the gate to each state individually. That way easier to tensor together
+    # for dual-rail purposes. Doing it at the level of the fidelity function doesn't seem right
+    # U_eJP = bosonic_sim.U_eJP_func(a, b, params, c_ops)
+    #
+    # # for dual rail tensor together the two superoperators then reorder appropriately
+    # U_eJP_DR = tensor(U_eJP, U_eJP)
+    # DR_dims = to_super(U_eJP_ideal_DR).dims
+    # V2 = bosonic_sim.V_2_op()
+    # U_eJP_DR_V2 = Qobj(V2.dag().data @ U_eJP_DR.data @ V2.data, dims=DR_dims)
 
     if postselection:
-        measurement_op_super_SR = to_super(measurement_op_SR)
-        measurement_op_super_parity = to_super(bosonic_sim.measurement_op_DR_parity())
-        measurement_op_super_tmon_DR = to_super(
-            tensor(measurement_op_SR, measurement_op_SR)
-        )
+        measurement_op_super_SR = measurement_op_SR
+        measurement_op_super_parity = bosonic_sim.measurement_op_DR_parity()
+        measurement_op_super_tmon_DR = tensor(measurement_op_SR, measurement_op_SR)
         measurement_op_DR = measurement_op_super_parity * measurement_op_super_tmon_DR
     else:
-        measurement_op_super_SR = to_super(qeye(truncated_dims))
-        measurement_op_DR = to_super(tensor(qeye(truncated_dims), qeye(truncated_dims)))
-    bosonic_fidel = FidelityBosonicOperations(g_comp_basis_states)
-    e_fidel_SR, prob_SR = bosonic_fidel.entanglement_fidelity_nielsen(
-        U_eJP,
+        measurement_op_super_SR = qeye(truncated_dims)
+        measurement_op_DR = tensor(qeye(truncated_dims), qeye(truncated_dims))
+    bosonic_fidel = FidelityBosonicOperations(gf_tmon=True, tmon_dim=tmon_dim, cavity_dim=cavity_dim)
+
+    e_fidel_SR, prob_SR = bosonic_fidel.entanglement_fidelity_nielsen_states(
+        "U_eJP_func",
+        (a, b, params, c_ops),
         projected_ideal_SR,
         g_comp_basis_states,
         measurement_op=measurement_op_super_SR,
     )
-    e_fidel_DR, prob_DR = bosonic_fidel.entanglement_fidelity_nielsen(
-        U_eJP_DR_V2,
-        projected_ideal_DR,
-        g_comp_basis_states_DR,
-        measurement_op=measurement_op_DR,
-    )
+    # e_fidel_DR, prob_DR = bosonic_fidel.entanglement_fidelity_nielsen(
+    #     U_eJP_DR_V2,
+    #     projected_ideal_DR,
+    #     g_comp_basis_states_DR,
+    #     measurement_op=measurement_op_DR,
+    # )
     print(f"saving run to {filepath}")
     print(f"entanglement fidelity single rail: {e_fidel_SR}")
     print(f"success probability single rail: {prob_SR}")
-    print(f"entanglement fidelity dual rail: {e_fidel_DR}")
-    print(f"success probability dual rail: {prob_DR}")
+    # print(f"entanglement fidelity dual rail: {e_fidel_DR}")
+    # print(f"success probability dual rail: {prob_DR}")
     with h5py.File(filepath, "w") as f:
         e_fidel_SR = f.create_dataset("e_fidel_SR", data=e_fidel_SR)
         e_fidel_DR = f.create_dataset("e_fidel_DR", data=e_fidel_DR)

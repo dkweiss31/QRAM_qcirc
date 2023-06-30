@@ -1,3 +1,4 @@
+from functools import partial
 from itertools import product
 from typing import List
 
@@ -12,19 +13,21 @@ from qutip import (
     liouvillian,
     to_super,
     qeye,
+    mesolve, Options,
 )
 import numpy as np
-from utils import id_wrap_ops, project_U, construct_basis_states_list
+from utils import id_wrap_ops, project_U, construct_basis_states_list, get_map
 
 
 class SimulateBosonicOperations:
     """ """
 
-    def __init__(self, gf_tmon=True, tmon_dim=3, cavity_dim=3):
+    def __init__(self, gf_tmon=True, tmon_dim=3, cavity_dim=3, control_dt=1.0):
         self.gf_tmon = gf_tmon
         self.tmon_dim = tmon_dim
         self.cavity_dim = cavity_dim
         self.truncated_dims = [cavity_dim, cavity_dim, tmon_dim]
+        self.control_dt = control_dt
         # below we define the s_ops for the transmon
         self.sx = None
         self.sy = None
@@ -107,7 +110,7 @@ class SimulateBosonicOperations:
         ]
         return c_ops
 
-    def cZZU(self, a_op: Qobj, b_op: Qobj, chi: float, c_ops: List[Qobj] = None, traj: bool = False):
+    def cZZU(self, a_op: Qobj, b_op: Qobj, chi: float, c_ops: List[Qobj] = None, state: Qobj = None):
         """
         Parameters
         ----------
@@ -128,11 +131,10 @@ class SimulateBosonicOperations:
             a_op.dag() * b_op + a_op * b_op.dag()
         )
         Omega = np.sqrt(g**2 + (chi / 2) ** 2)
-        t = 2.0 * np.pi / Omega
-        return self._propagator(H, t, c_ops=c_ops, traj=traj)
+        return self._prop_or_mesolve_factory(H, 2.0 * np.pi / Omega, c_ops, state)
 
     @staticmethod
-    def R_osc(a_op: Qobj, phi: float, c_ops: List[Qobj] = None, traj: bool = False):
+    def R_osc(a_op: Qobj, phi: float, c_ops: List[Qobj] = None, state: Qobj = None):
         """
         this gate is done in software and thus can be done with unit fidelity
         (hence why the collapse operators are not used even in the case when they are passed)
@@ -150,12 +152,29 @@ class SimulateBosonicOperations:
         propagator corresponding to a single-cavity rotation
         """
         cav_rotation = (-1j * phi * a_op.dag() * a_op).expm()
-        if c_ops is not None and traj is False:
-            return to_super(cav_rotation)
-        return cav_rotation
+        if c_ops is None:
+            if state is None:
+                return cav_rotation
+            else:
+                assert state.isket
+                return cav_rotation * state
+        else:
+            if state is None:
+                return to_super(cav_rotation)
+            else:
+                assert state.isoper
+                return cav_rotation * state * cav_rotation.dag()
+
+    def _prop_or_mesolve_factory(self, H, t, c_ops, state):
+        if state is None:
+            return self._propagator(H, t, c_ops=c_ops)
+        else:
+            tlist = np.linspace(0.0, t, int(t / self.control_dt))
+            result = mesolve(H, state, tlist, c_ops=c_ops, options=Options(store_final_state=True))
+            return result.final_state
 
     def R_tmon(
-        self, g: float, t: float, direction: str = "X", c_ops: List[Qobj] = None, traj:bool = False
+        self, g: float, t: float, direction: str = "X", c_ops: List[Qobj] = None, state:Qobj = None
     ):
         r"""
         Parameters
@@ -181,10 +200,10 @@ class SimulateBosonicOperations:
             s_op = self.sz
         else:
             raise RuntimeError("specified direction must be 'X', 'Y', or 'Z'")
-        return self._propagator(0.5 * g * s_op, t, c_ops=c_ops, traj=traj)
+        return self._prop_or_mesolve_factory(0.5 * g * s_op, t, c_ops, state)
 
     @staticmethod
-    def _propagator(H: Qobj, t: float, c_ops: List[Qobj] = None, traj: bool = False):
+    def _propagator(H: Qobj, t: float, c_ops: List[Qobj] = None):
         """
         Parameters
         ----------
@@ -204,57 +223,75 @@ class SimulateBosonicOperations:
         """
         if c_ops is None:
             return (-1j * H * t).expm()
-        elif traj:
-            Heff = H - 0.5 * 1j * sum([c_op.dag() * c_op for c_op in c_ops])
-            return (-1j * Heff * t).expm()
         return (liouvillian(H, c_ops) * t).expm()
 
-    def beamsplitter(self, a_op: Qobj, b_op: Qobj, g: float, t: float, c_ops=None):
+    def beamsplitter(self, a_op: Qobj, b_op: Qobj, g: float, t: float, c_ops=None, state: Qobj = None):
         H = 0.5 * g * a_op.dag() * b_op + 0.5 * np.conjugate(g) * b_op.dag() * a_op
-        return self._propagator(H, t, c_ops=c_ops)
+        return self._prop_or_mesolve_factory(H, t, c_ops, state)
 
-    def cZU(self, a_op: Qobj, chi: float, c_ops=None):
+    def cZU(self, a_op: Qobj, chi: float, c_ops=None, state: Qobj = None):
         H = 0.5 * chi * self.sz * a_op.dag() * a_op
         t = np.pi / chi
-        return self._propagator(H, t, c_ops=c_ops)
+        return self._prop_or_mesolve_factory(H, t, c_ops, state)
 
-    def cZZZU(self, a_op: Qobj, b_op: Qobj, c_op: Qobj, chi: float, c_ops=None):
-        U1 = self.cZZU(b_op, a_op, chi, c_ops=c_ops)
-        U2 = self.cZZU(b_op, c_op, chi, c_ops=c_ops)
-        U3 = self.cZU(b_op, chi, c_ops=c_ops)
-        return U1 * U2 * U3
-
-    @staticmethod
-    def SWAP(a_op: Qobj, b_op: Qobj):
-        return ((np.pi / 2) * (a_op.dag() * b_op - a_op * b_op.dag())).expm()
+    def cZZZU(self, a_op: Qobj, b_op: Qobj, c_op: Qobj, chi: float, c_ops=None, state: Qobj = None):
+        if state is None:
+            U1 = self.cZZU(b_op, a_op, chi, c_ops=c_ops)
+            U2 = self.cZZU(b_op, c_op, chi, c_ops=c_ops)
+            U3 = self.cZU(b_op, chi, c_ops=c_ops)
+            return U1 * U2 * U3
+        else:
+            U1_result = self.cZZU(b_op, a_op, chi, c_ops=c_ops, state=state)
+            U2_result = self.cZZU(b_op, c_op, chi, c_ops=c_ops, state=U1_result.final_state)
+            return self.cZU(b_op, chi, c_ops=c_ops, state=U2_result.final_state)
 
     def cZZ_time(self, chi):
         g = np.sqrt(3) * chi / 2
         Omega = np.sqrt(g**2 + (chi / 2) ** 2)
         return 2.0 * np.pi / Omega
 
-    def U_eJP_func(self, a_op: Qobj, b_op: Qobj, params, c_ops=None):
+    def U_eJP_func(self, a_op: Qobj, b_op: Qobj, params, c_ops=None, state: Qobj = None):
         (tmon_d_strength, chi) = params
         tmon_d_time = np.pi / (2 * tmon_d_strength)
-        JPP = self.cZZU(a_op, b_op, chi, c_ops=c_ops)
-        U_tmon_y = self.R_tmon(tmon_d_strength, tmon_d_time, direction="Y", c_ops=c_ops)
-        # don't want to use dagger here as it can be a superoperator (need to understand better)
-        U_tmon_y_min = self.R_tmon(
-            -tmon_d_strength, tmon_d_time, direction="Y", c_ops=c_ops
-        )
-        U_tmon_x = self.R_tmon(tmon_d_strength, tmon_d_time, direction="X", c_ops=c_ops)
-        U_a = self.R_osc(a_op, -np.pi / 2, c_ops=c_ops)
-        U_b = self.R_osc(b_op, -np.pi / 2, c_ops=c_ops)
-        return U_a * U_b * U_tmon_y_min * JPP * U_tmon_x * JPP * U_tmon_y
+        if state is None:
+            JPP = self.cZZU(a_op, b_op, chi, c_ops=c_ops)
+            U_tmon_y = self.R_tmon(tmon_d_strength, tmon_d_time, direction="Y", c_ops=c_ops)
+            # don't want to use dagger here as it can be a superoperator (need to understand better)
+            U_tmon_y_min = self.R_tmon(
+                -tmon_d_strength, tmon_d_time, direction="Y", c_ops=c_ops, state=state
+            )
+            U_tmon_x = self.R_tmon(tmon_d_strength, tmon_d_time, direction="X", c_ops=c_ops)
+            U_a = self.R_osc(a_op, -np.pi / 2, c_ops=c_ops)
+            U_b = self.R_osc(b_op, -np.pi / 2, c_ops=c_ops)
+            return U_a * U_b * U_tmon_y_min * JPP * U_tmon_x * JPP * U_tmon_y
+        else:
+            U_tmon_y = self.R_tmon(tmon_d_strength, tmon_d_time, direction="Y", c_ops=c_ops, state=state)
+            JPP_1 = self.cZZU(a_op, b_op, chi, c_ops=c_ops, state=U_tmon_y)
+            U_tmon_x = self.R_tmon(tmon_d_strength, tmon_d_time, direction="X", c_ops=c_ops, state=JPP_1)
+            JPP_2 = self.cZZU(a_op, b_op, chi, c_ops=c_ops, state=U_tmon_x)
+            U_tmon_y_min = self.R_tmon(
+                -tmon_d_strength, tmon_d_time, direction="Y", c_ops=c_ops, state=JPP_2
+            )
+            U_b = self.R_osc(b_op, -np.pi / 2, c_ops=c_ops, state=U_tmon_y_min)
+            U_a = self.R_osc(a_op, -np.pi / 2, c_ops=c_ops, state=U_b)
+            return U_a
+
+    def apply_gate_to_states(self, gate, args, states, num_cpus=1):
+        target_map = get_map(num_cpus)
+        gate_func = partial(getattr(self, gate), *args)
+        # only want to apply the costly function to unique states. below combine the
+        # results as appropriate for the propagated states
+        return list(target_map(gate_func, states))
 
     def U_erasure_check(self, a_op: Qobj, b_op: Qobj, params, c_ops=None):
-        (tmon_d_strength, chi) = params
-        tmon_d_time = np.pi / (2 * tmon_d_strength)
-        JPP = self.cZZU(a_op, b_op, chi, c_ops=c_ops)
-        U_tmon_y = self.R_tmon(tmon_d_strength, tmon_d_time, direction="Y", c_ops=c_ops)
-        U_a = self.R_osc(a_op, np.pi / 2, c_ops=c_ops)
-        U_b = self.R_osc(b_op, np.pi / 2, c_ops=c_ops)
-        return U_tmon_y * U_a * U_b * JPP * U_tmon_y
+        raise NotImplementedError("not implemented yet in the case of using mesolve")
+        # (tmon_d_strength, chi) = params
+        # tmon_d_time = np.pi / (2 * tmon_d_strength)
+        # JPP = self.cZZU(a_op, b_op, chi, c_ops=c_ops)
+        # U_tmon_y = self.R_tmon(tmon_d_strength, tmon_d_time, direction="Y", c_ops=c_ops)
+        # U_a = self.R_osc(a_op, np.pi / 2, c_ops=c_ops)
+        # U_b = self.R_osc(b_op, np.pi / 2, c_ops=c_ops)
+        # return U_tmon_y * U_a * U_b * JPP * U_tmon_y
 
     def measurement_op_tmon_projector(self, idx):
         """project onto a specific tmon eigenstate"""
@@ -352,61 +389,90 @@ class SimulateBosonicOperations:
         assert ideal_cZZU_projected == cZZU_projected
 
 
-class FidelityBosonicOperations:
-    def __init__(self, comp_basis_states):
-        self.comp_basis_states = comp_basis_states
+class FidelityBosonicOperations(SimulateBosonicOperations):
+    def __init__(self, gf_tmon=True, tmon_dim=3, cavity_dim=3, control_dt=1.0):
+        super().__init__(gf_tmon, tmon_dim, cavity_dim, control_dt)
 
     @staticmethod
-    def _operator_basis_lidar(ket_0, ket_1):
+    def _operator_basis_lidar(ket_0, ket_1, unique_state_list):
         pl_state = (ket_0 + ket_1).unit()
         min_state = (ket_0 + 1j * ket_1).unit()
-        return (
-            (1, 1j, -0.5 * (1 + 1j), -0.5 * (1 + 1j)),
-            (
-                pl_state * pl_state.dag(),
+        new_states = (pl_state * pl_state.dag(),
                 min_state * min_state.dag(),
                 ket_0 * ket_0.dag(),
-                ket_1 * ket_1.dag(),
-            ),
+                ket_1 * ket_1.dag(),)
+        for state in new_states:
+            if state not in unique_state_list:
+                unique_state_list.append(state)
+        return (
+            (1, 1j, -0.5 * (1 + 1j), -0.5 * (1 + 1j)),
+            new_states,
+            unique_state_list
         )
 
-    def operator_basis_lidar(self, basis_states=None):
-        if basis_states is None:
-            basis_states = self.comp_basis_states
-        op_basis, alpha_list, state_list = [], [], []
+    def operator_basis_lidar(self, basis_states):
+        op_basis, alpha_list, state_list, unique_state_list = [], [], [], []
         for i, ket_0 in enumerate(basis_states):
             for j, ket_1 in enumerate(basis_states):
                 if i == j:
                     alpha_list.append((1.0,))
                     op_basis.append(ket_0 * ket_0.dag())
                     state_list.append((ket_0 * ket_0.dag(),))
+                    if ket_0 * ket_0.dag() not in unique_state_list:
+                        unique_state_list.append(ket_0 * ket_0.dag())
                 else:
                     op_basis.append(ket_0 * ket_1.dag())
-                    alpha_coeffs, states = self._operator_basis_lidar(ket_0, ket_1)
+                    alpha_coeffs, states, unique_state_list = self._operator_basis_lidar(ket_0, ket_1,
+                                                                                         unique_state_list)
                     alpha_list.append(alpha_coeffs)
                     state_list.append(states)
                     assert ket_0 * ket_1.dag() == sum(
                         [alpha_coeffs[i] * states[i] for i in range(len(alpha_coeffs))]
                     )
-        return alpha_list, state_list, op_basis
+        return alpha_list, state_list, op_basis, unique_state_list
 
     @staticmethod
     def measurement_channel(rho, measurement_op):
-        if measurement_op.type == "oper":
-            new_rho = measurement_op * rho * measurement_op.dag()
-            return new_rho, np.trace(new_rho)
-        elif measurement_op.type == "super":
-            new_rho = measurement_op * rho
-            return new_rho, np.trace(vector_to_operator(new_rho))
-        else:
-            raise RuntimeError(
-                'measurement_op should be either of type "oper" or "super"'
-            )
+        assert measurement_op.type == "oper" and rho.type == "oper"
+        new_rho = measurement_op * rho * measurement_op.dag()
+        return new_rho, np.trace(new_rho)
 
     @staticmethod
     def process_fidelity_nielsen(entanglement_fidelity, num_qubits=2):
         dim = num_qubits**2
         return (dim * entanglement_fidelity + 1) / (dim + 1)
+
+    def entanglement_fidelity_nielsen_states(
+        self,
+        gate,
+        args,
+        U_ideal,
+        basis_states,
+        measurement_op=None,
+        ptrace_idxs=None,
+        num_qubits=2,
+        num_cpus=1,
+    ):
+        dim = 2 ** num_qubits
+        alpha_list, state_list, op_basis, unique_state_list = self.operator_basis_lidar(
+            basis_states=basis_states
+        )
+        st_dim = unique_state_list[0].dims
+        overall_contr = 0.0
+        total_prob = 0.0
+        # want to change this so that we only sum over unique states
+        num_states = 0
+        final_unique_states = self.apply_gate_to_states(gate, args, unique_state_list, num_cpus)
+        for j, op in enumerate(op_basis):
+            for k, (coeff, pauli_rho) in enumerate(zip(alpha_list[j], state_list[j])):
+                state_idx = unique_state_list.index(pauli_rho)
+                final_state = Qobj(final_unique_states[state_idx], dims=st_dim)
+                state_contr, prob = self._fidel_individual_state(final_state, op, U_ideal, basis_states,
+                                                                 measurement_op, ptrace_idxs)
+                overall_contr += coeff * state_contr
+                total_prob += prob
+                num_states += 1
+        return overall_contr / dim**2, total_prob / num_states
 
     def entanglement_fidelity_nielsen(
         self,
@@ -418,8 +484,8 @@ class FidelityBosonicOperations:
         num_qubits=2,
     ):
         dim = 2**num_qubits
-        alpha_list, state_list, op_basis = self.operator_basis_lidar(
-            basis_states=basis_states
+        alpha_list, state_list, op_basis, _ = self.operator_basis_lidar(
+            basis_states
         )
         overall_contr = 0.0
         total_prob = 0.0
@@ -427,25 +493,29 @@ class FidelityBosonicOperations:
         for j, op in enumerate(op_basis):
             for k, (coeff, pauli_rho) in enumerate(zip(alpha_list[j], state_list[j])):
                 rho = operator_to_vector(pauli_rho)
-                propagated_rho = U_real * rho
-                if measurement_op is not None:
-                    propagated_rho, prob = self.measurement_channel(
-                        propagated_rho, measurement_op
-                    )
-                else:
-                    prob = 0.0
-                propagated_rho = vector_to_operator(propagated_rho)
+                propagated_rho = vector_to_operator(U_real * rho)
+                state_contr, prob = self._fidel_individual_state(propagated_rho, op, U_ideal, basis_states,
+                                                                 measurement_op, ptrace_idxs)
+                overall_contr += coeff * state_contr
                 total_prob += prob
-                if ptrace_idxs is not None:
-                    propagated_rho = propagated_rho.ptrace(ptrace_idxs)
-                    op = op.ptrace(ptrace_idxs)
-                projected_rho = project_U(propagated_rho, basis_states=basis_states)
-                projected_op = project_U(op, basis_states=basis_states)
-                state_contr = coeff * np.trace(
-                    U_ideal * projected_op.dag() * U_ideal.dag() * projected_rho
-                )
-                overall_contr += state_contr
                 num_states += 1
         #       Nielsen formula for an orthogonal basis that obeys tr(U_{j}^dag U_{k}) = delta_{jk}
         #       (as opposed to dim delta_{jk} has one less factor of dim in the denominator
         return overall_contr / dim**2, total_prob / num_states
+
+    def _fidel_individual_state(self, propagated_rho, op, U_ideal, basis_states, measurement_op=None, ptrace_idxs=None):
+        if measurement_op is not None:
+            propagated_rho, prob = self.measurement_channel(
+                propagated_rho, measurement_op
+            )
+        else:
+            prob = 0.0
+        if ptrace_idxs is not None:
+            propagated_rho = propagated_rho.ptrace(ptrace_idxs)
+            op = op.ptrace(ptrace_idxs)
+        projected_rho = project_U(propagated_rho, basis_states=basis_states)
+        projected_op = project_U(op, basis_states=basis_states)
+        state_contr = np.trace(
+            U_ideal * projected_op.dag() * U_ideal.dag() * projected_rho
+        )
+        return state_contr, prob

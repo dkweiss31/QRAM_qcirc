@@ -2,6 +2,7 @@ from qutip import tensor, Qobj, basis, qeye, to_kraus, sigmax, sigmay, sigmaz
 import numpy as np
 import os
 import glob
+import pathos
 import re
 
 
@@ -103,6 +104,12 @@ def my_to_chi(q_oper):
         ]
     )
     return np.conjugate(e_ij_coeffs).T @ e_ij_coeffs
+
+
+def get_map(num_cpus: int = 1):
+    if num_cpus == 1:
+        return map
+    return pathos.pools.ProcessPool(nodes=num_cpus).map
 
 
 def calc_fidel_chi(chi_real, chi_ideal):
