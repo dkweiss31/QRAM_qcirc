@@ -3,7 +3,6 @@ from qutip import destroy, sigmaz
 
 from utils import id_wrap_ops, project_U
 
-# include as a test actual evolution of DR and compare to the piecemeal construction
 
 def test_cZZU(self):
     tmon_dim = 2

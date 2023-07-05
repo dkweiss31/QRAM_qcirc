@@ -6,7 +6,8 @@ directory = "out"
 filepath = generate_file_path("h5py", "entangle_fidel_SR_DR", directory)
 param_dict = {
     "tmon_dim": 3,
-    "cavity_dim": 2,
+    "cavity_dim": 4,
+    "control_dt": 4.0,
     "chi": 2.0 * np.pi * 0.002,
     "tmon_d_strength": 2.0 * np.pi * 0.01,
     "eta_gg": 0.9999,
@@ -21,6 +22,7 @@ param_dict = {
     "Gamma_phi_res": 1.0 / (5000 * 10**3),
     "nth": 0.01,
     "postselection": True,
-    "num_cpus": 4
+    "num_cpus": 8,
+    "liouvillian": False
 }
 main(filepath, param_dict)
