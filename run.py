@@ -21,5 +21,6 @@ param_dict = {
     "Gamma_phi_res": 1.0 / (5000 * 10**3),
     "nth": 0.01,
     "postselection": True,
+    "num_cpus": 4
 }
 main(filepath, param_dict)
