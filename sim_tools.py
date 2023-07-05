@@ -1,4 +1,3 @@
-from collections import OrderedDict
 from functools import partial
 from itertools import product
 from typing import List
@@ -9,8 +8,6 @@ from qutip import (
     Qobj,
     operator_to_vector,
     vector_to_operator,
-    sigmaz,
-    destroy,
     liouvillian,
     to_super,
     qeye,
@@ -127,8 +124,13 @@ class SimulateBosonicOperations:
             lowering operator for the first bosonic mode, coupled to the transmon
         b_op: Qobj
             lowering operator for the second bosonic mode
+        chi: float
+            dispersive shift between cavity a and its transmon
         c_ops: List[Qobj]
             collapse operators
+        state: Qobj
+            if None, we compute the propagator. if instead we pass a Qobj, the
+            time evolution of that specific state is computed
 
         Returns
         -------
@@ -156,6 +158,9 @@ class SimulateBosonicOperations:
             parameter describing the phase correction
         c_ops: List[Qobj]
             unused collapse operators
+        state: Qobj
+            if None, we compute the propagator. if instead we pass a Qobj, the
+            time evolution of that specific state is computed
         Returns
         -------
         propagator corresponding to a single-cavity rotation
@@ -203,6 +208,9 @@ class SimulateBosonicOperations:
             either "X", "Y", or "Z" depending on the rotation direction
         c_ops: List[Qobj]
             collapse operators
+        state: Qobj
+            if None, we compute the propagator. if instead we pass a Qobj, the
+            time evolution of that specific state is computed
 
         Returns
         -------
@@ -272,11 +280,6 @@ class SimulateBosonicOperations:
                 b_op, c_op, chi, c_ops=c_ops, state=U1_result.final_state
             )
             return self.cZU(b_op, chi, c_ops=c_ops, state=U2_result.final_state)
-
-    def cZZ_time(self, chi):
-        g = np.sqrt(3) * chi / 2
-        Omega = np.sqrt(g**2 + (chi / 2) ** 2)
-        return 2.0 * np.pi / Omega
 
     def U_eJP_func(
         self, a_op: Qobj, b_op: Qobj, params, c_ops=None, state: Qobj = None
@@ -419,8 +422,9 @@ class SimulateBosonicOperations:
         labels_basis_states = ["1100", "1001", "0110", "0011"]
         return basis_state_DR, labels_basis_states
 
+    @staticmethod
     def operator_basis_lidar(
-        self, basis_states: list, label_list: list = None
+        basis_states: list, label_list: list = None
     ) -> (dict, dict):
         """
         Parameters
@@ -429,7 +433,7 @@ class SimulateBosonicOperations:
             list of the basis states with which to construct the Lidar basis (coherences)
             see 10.1103/PhysRevA.77.032322 for more detail (note typo in the paper, missing an i)
         label_list: list
-            list of labels that apply to the basis states. If not provided, we provide
+            labels that apply to the basis states. If not provided, we provide
             on for you free of charge
         Returns
         -------
@@ -576,7 +580,7 @@ class SimulateBosonicOperations:
         U_ideal: Qobj
             propogator of the ideal evolution
         basis_states_labels_tuple: tuple
-            tuple of the basis states of interest and their labels
+            basis states of interest and their labels
         measurement_op: Qobj
             measurement operator, if any
         ptrace_idxs: tuple
@@ -622,8 +626,8 @@ class SimulateBosonicOperations:
                 num_states += 1
         return overall_contr / dim**2, total_prob / num_states
 
+    @staticmethod
     def _fidel_individual_state(
-        self,
         propagated_rho,
         op,
         U_ideal,
