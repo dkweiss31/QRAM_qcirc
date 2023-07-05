@@ -284,6 +284,26 @@ class SimulateBosonicOperations:
     def U_eJP_func(
         self, a_op: Qobj, b_op: Qobj, params, c_ops=None, state: Qobj = None
     ):
+        """
+        exponentiated JP operation. consists of hadamard, JP, X_{theta}, JP, hadamard
+        Parameters
+        ----------
+        a_op: Qobj
+            lowering operator for the first bosonic mode, coupled to the transmon
+        b_op: Qobj
+            lowering operator for the second bosonic mode
+        params: tuple
+            (tmon_d_strength, chi)
+        c_ops: List[Qobj]
+            collapse operators
+        state: Qobj
+            if None, we compute the propagator. if instead we pass a Qobj, the
+            time evolution of that specific state is computed
+
+        Returns
+        -------
+
+        """
         (tmon_d_strength, chi) = params
         tmon_d_time = np.pi / (2 * tmon_d_strength)
         if state is None:
@@ -302,6 +322,8 @@ class SimulateBosonicOperations:
             U_b = self.R_osc(b_op, -np.pi / 2, c_ops=c_ops)
             return U_a * U_b * U_tmon_y_min * JPP * U_tmon_x * JPP * U_tmon_y
         else:
+            # track the time evolution of the starting state, passing the final state
+            # from each operation as input for the next operation
             U_tmon_y = self.R_tmon(
                 tmon_d_strength, tmon_d_time, direction="Y", c_ops=c_ops, state=state
             )
@@ -317,7 +339,25 @@ class SimulateBosonicOperations:
             U_a = self.R_osc(a_op, -np.pi / 2, c_ops=c_ops, state=U_b)
             return U_a
 
-    def apply_gate_to_states(self, gate, args, states_dict, num_cpus=1):
+    def apply_gate_to_states(self, gate: str, args: tuple, states_dict: dict, num_cpus: int = 1):
+        """
+        apply the specified gate to the collection of states. I'm worried about ordering issues
+        which is why I turn them into lists before applying the gate and then turning the collection of states back
+        into a dict, but maybe with python 3.7+ I shouldn't worry?!?
+        Parameters
+        ----------
+        gate: str
+            name of the function to apply
+        args: tuple
+            arguments of the function (aside from the state we apply the gate to)
+        states_dict: dict
+            dictionary of the states to apply the gate to
+        num_cpus: int
+            number of cpus to use (this is the costliest function)
+        Returns
+        -------
+        dictionary of the final states with the same keys as states_dict
+        """
         labels_list, states_list = [], []
         for (label, state) in states_dict.items():
             labels_list.append(label)
