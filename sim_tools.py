@@ -345,6 +345,8 @@ class SimulateBosonicOperations:
         return sum([Fock_state * Fock_state.dag() for Fock_state in Fock_states])
 
     def measurement_op_DR_parity(self):
+        """measurement operator projecting onto the DR basis. Assumes identity operation
+        on the transmon"""
         measurement_op = 0.0
         for idx in range(self.tmon_dim):
             Fock_states_spec = [(i, j, idx) for i in range(2) for j in range(2)]
@@ -502,40 +504,6 @@ class SimulateBosonicOperations:
                     )
         return op_dict, unique_state_dict
 
-    def construct_final_SR_ops(
-        self, SR_op_dict: dict, final_unique_states_dict: dict
-    ) -> dict:
-        """
-        Parameters
-        ----------
-        SR_op_dict: dict
-            op dictionary as returned by operator_basis_lidar
-        final_unique_states_dict
-            state dictionary in the same form as returned by operator_basis_lidar
-
-        Returns
-        -------
-            final SR operators according to how the final unique states transform
-        """
-        final_SR_ops = {}
-        for key in SR_op_dict.keys():
-            op, coeffs, rhos, labels = SR_op_dict[key]
-            final_SR_ops[key] = sum(
-                [
-                    coeffs[idx] * final_unique_states_dict[label]
-                    for idx, label in enumerate(labels)
-                ]
-            )
-        return final_SR_ops
-
-    def construct_final_unique_DR_states(self, unique_DR_state_dict, final_SR_op_dict):
-        final_DR_state_dict = {}
-        for (label, state) in unique_DR_state_dict.items():
-            final_DR_state_dict[label] = self.DR_state_from_SR_ops(
-                label, final_SR_op_dict
-            )
-        return final_DR_state_dict
-
     def DR_state_from_SR_ops(self, DR_label: tuple, final_SR_op_dict: dict) -> Qobj:
         """
         Parameters
@@ -543,7 +511,7 @@ class SimulateBosonicOperations:
         DR_label: tuple
             tuple either of length 1, signifying not a superposition state,
             or of length 3 signifying a superposition state. In this case, the
-            first entry is the label of the first state, the third entry is the coefficient
+            first entry is the label of the first state, the third entry is the label
             of the second state and the second entry is the coefficient of the second state
         final_SR_op_dict: dict
             dictionary of the final SR operators. labels are of the form "1100" which indicates
@@ -571,19 +539,22 @@ class SimulateBosonicOperations:
 
     @staticmethod
     def _DR_state_from_SR_ops(DR_label_1, DR_label_2, final_SR_ops):
-        """"""
+        """construct DR state given DR labels and dictionary of SR operators. the DR labels are assumed to be of the
+        form e.g. '1100' to signify the ket |11>|00>. The keys of the SR dict correspond to operators:
+        Ex:
+            DR_label_1 = "1100" -> |11>|00> (order of router, input, router, input as opposed to logical ordering)
+            DR_label_1 = "1001" -> |10>|01>
+            SR_label_1 = "1110" -> |11><10|
+            SR_label_1 = "0001" -> |00><01|
+            return |1100><1001|
+        """
         SR_label_1 = DR_label_1[0:2] + DR_label_2[0:2]
         SR_label_2 = DR_label_1[2:4] + DR_label_2[2:4]
         return tensor(final_SR_ops[SR_label_1], final_SR_ops[SR_label_2])
 
     @staticmethod
-    def measurement_channel(rho, measurement_op):
-        assert measurement_op.type == "oper" and rho.type == "oper"
-        new_rho = measurement_op * rho * measurement_op.dag()
-        return new_rho, np.trace(new_rho)
-
-    @staticmethod
     def process_fidelity_nielsen(entanglement_fidelity, num_qubits=2):
+        """standard formula for process fidelity"""
         dim = num_qubits**2
         return (dim * entanglement_fidelity + 1) / (dim + 1)
 
@@ -626,14 +597,16 @@ class SimulateBosonicOperations:
         )
         overall_contr = 0.0
         total_prob = 0.0
-        # want to change num_states indexing so that we only sum over unique states
+        # TODO want to change num_states indexing so that we only sum over unique states
         num_states = 0
         for op_key in op_dict.keys():
             op, coeffs, rhos, labels = op_dict[op_key]
             for (coeff, pauli_rho, label) in zip(coeffs, rhos, labels):
+                # we've constructed the superoperator
                 if type(prop_or_final_states_dict) == Qobj:
                     rho = operator_to_vector(pauli_rho)
                     propagated_rho = vector_to_operator(prop_or_final_states_dict * rho)
+                # we've tracked individual states instead
                 else:
                     propagated_rho = prop_or_final_states_dict[label]
                 state_contr, prob = self._fidel_individual_state(
@@ -658,10 +631,10 @@ class SimulateBosonicOperations:
         measurement_op=None,
         ptrace_idxs=None,
     ):
+        """see above function for documentation"""
         if measurement_op is not None:
-            propagated_rho, prob = self.measurement_channel(
-                propagated_rho, measurement_op
-            )
+            propagated_rho = measurement_op * propagated_rho * measurement_op.dag()
+            prob = np.trace(propagated_rho)
         else:
             prob = 0.0
         if ptrace_idxs is not None:
@@ -669,6 +642,7 @@ class SimulateBosonicOperations:
             op = op.ptrace(ptrace_idxs)
         projected_rho = project_U(propagated_rho, basis_states=basis_states)
         projected_op = project_U(op, basis_states=basis_states)
+        # below formula straight out of Nielsen's paper
         state_contr = np.trace(
             U_ideal * projected_op.dag() * U_ideal.dag() * projected_rho
         )

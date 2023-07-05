@@ -40,9 +40,9 @@ def main(filepath, param_dict):
     g_comp_basis_states_DR, labels_DR = bosonic_sim.DR_basis(g_comp_basis_states)
     # measurement operator allowing for nonideal measurement
     measurement_op_SR = (
-            np.sqrt(eta_gg) * bosonic_sim.measurement_op_tmon_projector(0)
-            + np.sqrt(eta_ge) * bosonic_sim.measurement_op_tmon_projector(1)
-            + np.sqrt(eta_gf) * bosonic_sim.measurement_op_tmon_projector(2)
+        np.sqrt(eta_gg) * bosonic_sim.measurement_op_tmon_projector(0)
+        + np.sqrt(eta_ge) * bosonic_sim.measurement_op_tmon_projector(1)
+        + np.sqrt(eta_gf) * bosonic_sim.measurement_op_tmon_projector(2)
     )
     # # ideal case, no dissipation
     U_eJP_ideal_SR = bosonic_sim.U_eJP_func(a, b, params)
@@ -70,11 +70,19 @@ def main(filepath, param_dict):
             basis_states=g_comp_basis_states_DR, label_list=labels_DR
         )
         # apply the gate to each state, in parallel if desired
-        final_SR = bosonic_sim.apply_gate_to_states("U_eJP_func", (a, b, params, c_ops),
-                                                    unique_state_dict_SR, num_cpus)
-        # construct the final dual-rail states from the computed final single rail states
-        final_SR_ops = bosonic_sim.construct_final_SR_ops(op_dict_SR, final_SR)
-        final_DR = bosonic_sim.construct_final_unique_DR_states(unique_state_dict_DR, final_SR_ops)
+        final_SR = bosonic_sim.apply_gate_to_states(
+            "U_eJP_func", (a, b, params, c_ops), unique_state_dict_SR, num_cpus
+        )
+        # construct the final dual-rail states from the computed final single rail states. to
+        # do this we first reconstruct the final SR ops
+        final_SR_ops = {
+            key: sum(coeffs[idx] * final_SR[label] for idx, label in enumerate(labels))
+            for key, (op, coeffs, rhos, labels) in op_dict_SR.items()
+        }
+        final_DR = {
+            label: bosonic_sim.DR_state_from_SR_ops(label, final_SR_ops)
+            for label, state in unique_state_dict_DR.items()
+        }
     if postselection:
         measurement_op_parity = bosonic_sim.measurement_op_DR_parity()
         measurement_op_tmon_DR = tensor(measurement_op_SR, measurement_op_SR)
