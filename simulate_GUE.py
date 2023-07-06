@@ -1,15 +1,15 @@
 from qutip import (
     destroy,
     mesolve,
-    Options,
+    Options, Qobj, tensor,
 )
 import numpy as np
 from scipy.special import erf
 
-from utils import id_wrap_ops
+from utils import id_wrap_ops, construct_basis_states_list
 
 
-class GUEFidelity:
+class SimulateGUE:
     """compute the fidelity of state transfer for GUEs"""
 
     def __init__(
@@ -163,10 +163,11 @@ class GUEFidelity:
             args=args,
             e_ops=e_ops,
             options=Options(store_final_state=True, store_states=True),
+            progress_bar=True,
         )
 
 
-class GUEFidelityTwoWay:
+class SimulateGUETwoWay:
     """compute the fidelity of state transfer for GUEs"""
 
     def __init__(
@@ -355,4 +356,5 @@ class GUEFidelityTwoWay:
             args=args,
             e_ops=e_ops,
             options=Options(store_final_state=True, store_states=True),
+            progress_bar=True,
         )
