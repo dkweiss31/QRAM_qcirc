@@ -77,9 +77,7 @@ def main(filepath, param_dict):
         op_dict_DR, unique_state_dict_DR = fidelity_DR.operator_basis_lidar()
         # apply the gate to each state, in parallel if desired
         U_eJP_partial = partial(bosonic_sim_SR.U_eJP_func, a, b, params, c_ops)
-        final_SR = apply_gate_to_states(
-            U_eJP_partial, unique_state_dict_SR, num_cpus
-        )
+        final_SR = apply_gate_to_states(U_eJP_partial, unique_state_dict_SR, num_cpus)
         # construct the final dual-rail states from the computed final single rail states. to
         # do this we first reconstruct the final SR ops
         final_SR_ops = fidelity_SR.operators_from_states(op_dict_SR, final_SR)

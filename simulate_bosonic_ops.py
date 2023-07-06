@@ -10,7 +10,7 @@ from qutip import (
 )
 import numpy as np
 from utils import id_wrap_ops, construct_basis_states_list
-from quantum_helpers import _prop_or_mesolve_factory, _Fock_prods
+from quantum_helpers import prop_or_mesolve_factory, _Fock_prods
 
 
 class SimulateBosonicOperations:
@@ -151,7 +151,9 @@ class SimulateBosonicOperations:
             a_op.dag() * b_op + a_op * b_op.dag()
         )
         Omega = np.sqrt(g**2 + (chi / 2) ** 2)
-        return _prop_or_mesolve_factory(H, 2.0 * np.pi / Omega, self.control_dt, c_ops, state)
+        return prop_or_mesolve_factory(
+            H, 2.0 * np.pi / Omega, self.control_dt, c_ops, state
+        )
 
     @staticmethod
     def R_osc(a_op: Qobj, phi: float, c_ops: List[Qobj] = None, state: Qobj = None):
@@ -223,18 +225,18 @@ class SimulateBosonicOperations:
             s_op = self.sz
         else:
             raise RuntimeError("specified direction must be 'X', 'Y', or 'Z'")
-        return _prop_or_mesolve_factory(0.5 * g * s_op, t, self.control_dt, c_ops, state)
+        return prop_or_mesolve_factory(0.5 * g * s_op, t, self.control_dt, c_ops, state)
 
     def beamsplitter(
         self, a_op: Qobj, b_op: Qobj, g: float, t: float, c_ops=None, state: Qobj = None
     ):
         H = 0.5 * g * a_op.dag() * b_op + 0.5 * np.conjugate(g) * b_op.dag() * a_op
-        return _prop_or_mesolve_factory(H, t, self.control_dt, c_ops, state)
+        return prop_or_mesolve_factory(H, t, self.control_dt, c_ops, state)
 
     def cZU(self, a_op: Qobj, chi: float, c_ops=None, state: Qobj = None):
         H = 0.5 * chi * self.sz * a_op.dag() * a_op
         t = np.pi / chi
-        return _prop_or_mesolve_factory(H, t, self.control_dt, c_ops, state)
+        return prop_or_mesolve_factory(H, t, self.control_dt, c_ops, state)
 
     def cZZZU(
         self,
@@ -363,7 +365,12 @@ class SimulateBosonicOperations:
 
 class SimulateBosonicOperationsDR(SimulateBosonicOperations):
     def __init__(self, gf_tmon=True, tmon_dim=3, cavity_dim=3, control_dt=1.0):
-        super().__init__(gf_tmon=gf_tmon, tmon_dim=tmon_dim, cavity_dim=cavity_dim, control_dt=control_dt)
+        super().__init__(
+            gf_tmon=gf_tmon,
+            tmon_dim=tmon_dim,
+            cavity_dim=cavity_dim,
+            control_dt=control_dt,
+        )
 
     def measurement_op_DR_parity(self):
         """measurement operator projecting onto the DR basis. Assumes identity operation
@@ -371,7 +378,7 @@ class SimulateBosonicOperationsDR(SimulateBosonicOperations):
         measurement_op = 0.0
         for idx in range(self.tmon_dim):
             Fock_states_spec = [(i, j, idx) for i in range(2) for j in range(2)]
-            #TODO confusing in the below that self.truncated_dims refers to the SR system...
+            # TODO confusing in the below that self.truncated_dims refers to the SR system...
             Fock_states = construct_basis_states_list(
                 Fock_states_spec, self.truncated_dims
             )
