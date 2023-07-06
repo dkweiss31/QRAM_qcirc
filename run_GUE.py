@@ -1,5 +1,5 @@
 import numpy as np
-from fidelity_GUE import main
+from main_GUE import main
 from utils import generate_file_path
 
 directory = "out"

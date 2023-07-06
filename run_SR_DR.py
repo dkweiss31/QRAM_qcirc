@@ -1,5 +1,5 @@
 import numpy as np
-from fidelity_SR_DR import main
+from main_SR_DR import main
 from utils import generate_file_path
 
 directory = "out"
