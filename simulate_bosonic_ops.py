@@ -1,4 +1,3 @@
-from functools import partial
 from itertools import product
 from typing import List
 
@@ -6,20 +5,30 @@ from qutip import (
     tensor,
     basis,
     Qobj,
-    operator_to_vector,
-    vector_to_operator,
-    liouvillian,
     to_super,
     qeye,
-    mesolve,
-    Options,
 )
 import numpy as np
-from utils import id_wrap_ops, project_U, construct_basis_states_list, get_map
+from utils import id_wrap_ops, construct_basis_states_list
+from quantum_helpers import _prop_or_mesolve_factory, _Fock_prods
 
 
 class SimulateBosonicOperations:
-    """ """
+    """
+    Simulate time evolution of a system of two cavities with one coupled to a transmon
+    Parameters
+    ----------
+    gf_tmon: bool
+        True: we use a gf tmon
+        False: we use a ge tmon
+    tmon_dim: int
+        transmon Hilbert space dimension
+    cavity_dim: int
+        cavity Hilbert space dimensions
+    control_dt: float
+        if using the state tracking method (mesolve vs. exponentiating) the dt of the tlist
+        past to mesolve
+    """
 
     def __init__(self, gf_tmon=True, tmon_dim=3, cavity_dim=3, control_dt=1.0):
         self.gf_tmon = gf_tmon
@@ -142,7 +151,7 @@ class SimulateBosonicOperations:
             a_op.dag() * b_op + a_op * b_op.dag()
         )
         Omega = np.sqrt(g**2 + (chi / 2) ** 2)
-        return self._prop_or_mesolve_factory(H, 2.0 * np.pi / Omega, c_ops, state)
+        return _prop_or_mesolve_factory(H, 2.0 * np.pi / Omega, self.control_dt, c_ops, state)
 
     @staticmethod
     def R_osc(a_op: Qobj, phi: float, c_ops: List[Qobj] = None, state: Qobj = None):
@@ -179,16 +188,6 @@ class SimulateBosonicOperations:
                 assert state.isoper
                 return cav_rotation * state * cav_rotation.dag()
 
-    def _prop_or_mesolve_factory(self, H, t, c_ops, state):
-        if state is None:
-            return self._propagator(H, t, c_ops=c_ops)
-        else:
-            tlist = np.linspace(0.0, t, int(t / self.control_dt))
-            result = mesolve(
-                H, state, tlist, c_ops=c_ops, options=Options(store_final_state=True)
-            )
-            return result.final_state
-
     def R_tmon(
         self,
         g: float,
@@ -224,41 +223,18 @@ class SimulateBosonicOperations:
             s_op = self.sz
         else:
             raise RuntimeError("specified direction must be 'X', 'Y', or 'Z'")
-        return self._prop_or_mesolve_factory(0.5 * g * s_op, t, c_ops, state)
-
-    @staticmethod
-    def _propagator(H: Qobj, t: float, c_ops: List[Qobj] = None):
-        """
-        Parameters
-        ----------
-        H: Qobj
-            Hamiltonian
-        t: float
-            time for which the Hamiltonian acts
-        c_ops: List[Qobj]
-            list of collapse operators
-
-        Returns
-        -------
-        propagator corresponding to the Hamiltonian acting for a time :math:`t`.
-        If c_ops are not passed, we assume the Hamiltonian is time
-        independent and exponentiate it. If c_ops are passed, we construct the
-        Liouvillian and exponentiate that instead.
-        """
-        if c_ops is None:
-            return (-1j * H * t).expm()
-        return (liouvillian(H, c_ops) * t).expm()
+        return _prop_or_mesolve_factory(0.5 * g * s_op, t, self.control_dt, c_ops, state)
 
     def beamsplitter(
         self, a_op: Qobj, b_op: Qobj, g: float, t: float, c_ops=None, state: Qobj = None
     ):
         H = 0.5 * g * a_op.dag() * b_op + 0.5 * np.conjugate(g) * b_op.dag() * a_op
-        return self._prop_or_mesolve_factory(H, t, c_ops, state)
+        return _prop_or_mesolve_factory(H, t, self.control_dt, c_ops, state)
 
     def cZU(self, a_op: Qobj, chi: float, c_ops=None, state: Qobj = None):
         H = 0.5 * chi * self.sz * a_op.dag() * a_op
         t = np.pi / chi
-        return self._prop_or_mesolve_factory(H, t, c_ops, state)
+        return _prop_or_mesolve_factory(H, t, self.control_dt, c_ops, state)
 
     def cZZZU(
         self,
@@ -302,7 +278,7 @@ class SimulateBosonicOperations:
 
         Returns
         -------
-
+            propagator or state as described above
         """
         (tmon_d_strength, chi) = params
         tmon_d_time = np.pi / (2 * tmon_d_strength)
@@ -339,36 +315,6 @@ class SimulateBosonicOperations:
             U_a = self.R_osc(a_op, -np.pi / 2, c_ops=c_ops, state=U_b)
             return U_a
 
-    def apply_gate_to_states(self, gate: str, args: tuple, states_dict: dict, num_cpus: int = 1):
-        """
-        apply the specified gate to the collection of states. I'm worried about ordering issues
-        which is why I turn them into lists before applying the gate and then turning the collection of states back
-        into a dict, but maybe with python 3.7+ I shouldn't worry?!?
-        Parameters
-        ----------
-        gate: str
-            name of the function to apply
-        args: tuple
-            arguments of the function (aside from the state we apply the gate to)
-        states_dict: dict
-            dictionary of the states to apply the gate to
-        num_cpus: int
-            number of cpus to use (this is the costliest function)
-        Returns
-        -------
-        dictionary of the final states with the same keys as states_dict
-        """
-        labels_list, states_list = [], []
-        for (label, state) in states_dict.items():
-            labels_list.append(label)
-            states_list.append(state)
-        target_map = get_map(num_cpus)
-        gate_func = partial(getattr(self, gate), *args)
-        # only want to apply the costly function to unique states. below combine the
-        # results as appropriate for the propagated states
-        mapped_states = list(target_map(gate_func, states_list))
-        return dict(zip(labels_list, mapped_states))
-
     def U_erasure_check(self, a_op: Qobj, b_op: Qobj, params, c_ops=None):
         raise NotImplementedError("not implemented yet in the case of using mesolve")
         # (tmon_d_strength, chi) = params
@@ -387,38 +333,13 @@ class SimulateBosonicOperations:
         Fock_states = construct_basis_states_list(Fock_states_spec, self.truncated_dims)
         return sum([Fock_state * Fock_state.dag() for Fock_state in Fock_states])
 
-    def measurement_op_DR_parity(self):
-        """measurement operator projecting onto the DR basis. Assumes identity operation
-        on the transmon"""
-        measurement_op = 0.0
-        for idx in range(self.tmon_dim):
-            Fock_states_spec = [(i, j, idx) for i in range(2) for j in range(2)]
-            Fock_states = construct_basis_states_list(
-                Fock_states_spec, self.truncated_dims
-            )
-            Fock_states_DR, _ = self.DR_basis(Fock_states)
-            measurement_op += sum(
-                [
-                    detected_state * detected_state.dag()
-                    for detected_state in Fock_states_DR
-                ]
-            )
-        return measurement_op
-
-    @staticmethod
-    def _Fock_prods(dim):
-        if type(dim) == int:
-            return range(dim)
-        else:
-            return list(product(*map(range, dim)))
-
     def SWAP_op(self, idx_0, idx_1, dims=None):
         """SWAP between two subsystems"""
         if dims is None:
             dims = self.truncated_dims
         dim_0 = dims[idx_0]
         dim_1 = dims[idx_1]
-        Fock_prods = product(*map(self._Fock_prods, [dim_0, dim_1]))
+        Fock_prods = product(*map(_Fock_prods, [dim_0, dim_1]))
         result = 0.0
         for Fock_prod in Fock_prods:
             id_list = [qeye(dim) for dim in dims]
@@ -439,10 +360,29 @@ class SimulateBosonicOperations:
             result += tensor(*id_list)
         return result
 
-    def V_2_op(self):
-        """see https://arxiv.org/abs/1111.6950 , operator that SWAPs the internal indices
-        to properly order a tensor product of superoperators"""
-        return self.SWAP_op(1, 2, dims=4 * [self.truncated_dims])
+
+class SimulateBosonicOperationsDR(SimulateBosonicOperations):
+    def __init__(self, gf_tmon=True, tmon_dim=3, cavity_dim=3, control_dt=1.0):
+        super().__init__(gf_tmon=gf_tmon, tmon_dim=tmon_dim, cavity_dim=cavity_dim, control_dt=control_dt)
+
+    def measurement_op_DR_parity(self):
+        """measurement operator projecting onto the DR basis. Assumes identity operation
+        on the transmon"""
+        measurement_op = 0.0
+        for idx in range(self.tmon_dim):
+            Fock_states_spec = [(i, j, idx) for i in range(2) for j in range(2)]
+            #TODO confusing in the below that self.truncated_dims refers to the SR system...
+            Fock_states = construct_basis_states_list(
+                Fock_states_spec, self.truncated_dims
+            )
+            Fock_states_DR, _ = self.DR_basis(Fock_states)
+            measurement_op += sum(
+                [
+                    detected_state * detected_state.dag()
+                    for detected_state in Fock_states_DR
+                ]
+            )
+        return measurement_op
 
     @staticmethod
     def DR_basis(SR_comp_bas_states):
@@ -461,92 +401,6 @@ class SimulateBosonicOperations:
         ]
         labels_basis_states = ["1100", "1001", "0110", "0011"]
         return basis_state_DR, labels_basis_states
-
-    @staticmethod
-    def operator_basis_lidar(
-        basis_states: list, label_list: list = None
-    ) -> (dict, dict):
-        """
-        Parameters
-        ----------
-        basis_states: list
-            list of the basis states with which to construct the Lidar basis (coherences)
-            see 10.1103/PhysRevA.77.032322 for more detail (note typo in the paper, missing an i)
-        label_list: list
-            labels that apply to the basis states. If not provided, we provide
-            on for you free of charge
-        Returns
-        -------
-            a tuple of dictionaries. The first dictionary contains information on the operators
-            whose evolution we want to track. The keys correspond to the coherence, e.g. "12"
-            for the coherence |1><2| or 11 for the "coherence" |1><1|. The values are tuples containing
-            four pieces of information. first the operator in question, next a tuple of coefficients
-            in the state decomposition (really density matrices, but call them "states" to differentiate from the
-            operator coherences which are not density matrices) of the operator, next is those states,
-            and finally a tuple of labels corresponding to the states.
-        """
-        if label_list is None:
-            label_list = range(len(basis_states))
-        op_dict = {}
-        unique_state_dict = {}
-        for i, ket_0 in enumerate(basis_states):
-            for j, ket_1 in enumerate(basis_states):
-                if i == j:
-                    op_dict[label_list[i] + label_list[i]] = (
-                        ket_0 * ket_0.dag(),
-                        (1.0,),
-                        (ket_0 * ket_0.dag(),),
-                        ((label_list[i],),),
-                    )
-                    if (label_list[i],) not in unique_state_dict:
-                        unique_state_dict[(label_list[i],)] = ket_0 * ket_0.dag()
-                else:
-                    # slight inefficiency rn is that |ij> + |kl> and |ij> + |kl> get recorded as different states
-                    pl_state = (ket_0 + ket_1).unit()
-                    min_state = (ket_0 + 1j * ket_1).unit()
-                    new_states = (
-                        pl_state * pl_state.dag(),
-                        min_state * min_state.dag(),
-                        ket_0 * ket_0.dag(),
-                        ket_1 * ket_1.dag(),
-                    )
-                    alpha_coeffs = (1, 1j, -0.5 * (1 + 1j), -0.5 * (1 + 1j))
-                    label_0 = label_list[i]
-                    label_1 = label_list[j]
-                    new_labels = (
-                        (
-                            label_0,
-                            1,
-                            label_1,
-                        ),
-                        (
-                            label_0,
-                            1j,
-                            label_1,
-                        ),
-                        (label_0,),
-                        (label_1,),
-                    )
-                    op_dict[label_list[i] + label_list[j]] = (
-                        ket_0 * ket_1.dag(),
-                        alpha_coeffs,
-                        new_states,
-                        new_labels,
-                    )
-                    unique_state_dict.update(
-                        {
-                            new_labels[k]: state
-                            for k, state in enumerate(new_states)
-                            if k not in unique_state_dict
-                        }
-                    )
-                    assert ket_0 * ket_1.dag() == sum(
-                        [
-                            alpha_coeffs[i] * new_states[i]
-                            for i in range(len(alpha_coeffs))
-                        ]
-                    )
-        return op_dict, unique_state_dict
 
     def DR_state_from_SR_ops(self, DR_label: tuple, final_SR_op_dict: dict) -> Qobj:
         """
@@ -596,98 +450,7 @@ class SimulateBosonicOperations:
         SR_label_2 = DR_label_1[2:4] + DR_label_2[2:4]
         return tensor(final_SR_ops[SR_label_1], final_SR_ops[SR_label_2])
 
-    @staticmethod
-    def process_fidelity_nielsen(entanglement_fidelity, num_qubits=2):
-        """standard formula for process fidelity"""
-        dim = num_qubits**2
-        return (dim * entanglement_fidelity + 1) / (dim + 1)
-
-    def entanglement_fidelity_nielsen(
-        self,
-        prop_or_final_states_dict,
-        U_ideal,
-        basis_states_labels_tuple,
-        measurement_op=None,
-        ptrace_idxs=None,
-        num_qubits=2,
-    ) -> (float, float):
-        """
-        Parameters
-        ----------
-        prop_or_final_states_dict: Qobj or dict
-            either the propogator (superoperator) corresponding to the real time evolution
-            or a dictionary of how the basis states of interest evolve
-        U_ideal: Qobj
-            propogator of the ideal evolution
-        basis_states_labels_tuple: tuple
-            basis states of interest and their labels
-        measurement_op: Qobj
-            measurement operator, if any
-        ptrace_idxs: tuple
-            indices to keep if we want to trace over a subsystem
-        num_qubits: int
-            number of qubits, usually here 2
-
-        Returns
-        -------
-            returns a tuple of floats corresponding to the entanglement fidelity
-            according the Nielsen's formula together with the success probability
-
-        """
-        dim = 2**num_qubits
-        basis_states, label_list = basis_states_labels_tuple
-        op_dict, unique_state_dict = self.operator_basis_lidar(
-            basis_states=basis_states, label_list=label_list
-        )
-        overall_contr = 0.0
-        total_prob = 0.0
-        # TODO want to change num_states indexing so that we only sum over unique states
-        num_states = 0
-        for op_key in op_dict.keys():
-            op, coeffs, rhos, labels = op_dict[op_key]
-            for (coeff, pauli_rho, label) in zip(coeffs, rhos, labels):
-                # we've constructed the superoperator
-                if type(prop_or_final_states_dict) == Qobj:
-                    rho = operator_to_vector(pauli_rho)
-                    propagated_rho = vector_to_operator(prop_or_final_states_dict * rho)
-                # we've tracked individual states instead
-                else:
-                    propagated_rho = prop_or_final_states_dict[label]
-                state_contr, prob = self._fidel_individual_state(
-                    propagated_rho,
-                    op,
-                    U_ideal,
-                    basis_states,
-                    measurement_op,
-                    ptrace_idxs,
-                )
-                overall_contr += coeff * state_contr
-                total_prob += prob
-                num_states += 1
-        return overall_contr / dim**2, total_prob / num_states
-
-    @staticmethod
-    def _fidel_individual_state(
-        propagated_rho,
-        op,
-        U_ideal,
-        basis_states,
-        measurement_op=None,
-        ptrace_idxs=None,
-    ):
-        """see above function for documentation"""
-        if measurement_op is not None:
-            propagated_rho = measurement_op * propagated_rho * measurement_op.dag()
-            prob = np.trace(propagated_rho)
-        else:
-            prob = 0.0
-        if ptrace_idxs is not None:
-            propagated_rho = propagated_rho.ptrace(ptrace_idxs)
-            op = op.ptrace(ptrace_idxs)
-        projected_rho = project_U(propagated_rho, basis_states=basis_states)
-        projected_op = project_U(op, basis_states=basis_states)
-        # below formula straight out of Nielsen's paper
-        state_contr = np.trace(
-            U_ideal * projected_op.dag() * U_ideal.dag() * projected_rho
-        )
-        return state_contr, prob
+    def V_2_op(self):
+        """see https://arxiv.org/abs/1111.6950 , operator that SWAPs the internal indices
+        to properly order a tensor product of superoperators"""
+        return self.SWAP_op(1, 2, dims=4 * [self.truncated_dims])

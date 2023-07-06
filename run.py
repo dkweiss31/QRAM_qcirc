@@ -1,12 +1,12 @@
 import numpy as np
-from run_SR_DR import main
+from fidelity_SR_DR import main
 from utils import generate_file_path
 
 directory = "out"
 filepath = generate_file_path("h5py", "entangle_fidel_SR_DR", directory)
 param_dict = {
     "tmon_dim": 3,
-    "cavity_dim": 4,
+    "cavity_dim": 2,
     "control_dt": 4.0,
     "chi": 2.0 * np.pi * 0.002,
     "tmon_d_strength": 2.0 * np.pi * 0.01,
