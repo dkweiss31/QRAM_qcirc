@@ -3,7 +3,6 @@ from functools import partial
 import numpy as np
 from qutip import (
     destroy,
-    sigmaz,
     Qobj,
     sigmax,
     operator_to_vector,
@@ -39,15 +38,17 @@ param_dict = {
     "liouvillian": False,
 }
 
+# TODO add an explicit check that U_eJP correctly reproduces the analytical result
+
 
 class TestSimulateBosonicOps:
     @classmethod
     def setup_class(cls):
         cls.sbo = SimulateBosonicOperations(
-            gf_tmon=True, cavity_dim=2, tmon_dim=3, control_dt=2.0
+            gf_tmon=True, cavity_dim=2, tmon_dim=3, control_dt=4.0
         )
         cls.sbodr = SimulateBosonicOperationsDR(
-            gf_tmon=True, cavity_dim=2, tmon_dim=3, control_dt=2.0
+            gf_tmon=True, cavity_dim=2, tmon_dim=3, control_dt=4.0
         )
 
     def test_SWAP(self):
@@ -80,7 +81,6 @@ class TestSimulateBosonicOps:
     def test_cZZU(self):
         cav_a_idx = 0
         cav_b_idx = 1
-        tmon_idx = 2
         cavity_fock_trunc = 2
         a = id_wrap_ops(
             destroy(self.sbo.cavity_dim), cav_a_idx, self.sbo.truncated_dims
