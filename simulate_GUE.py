@@ -1,15 +1,18 @@
+from functools import partial
+from typing import Optional
+
 from qutip import (
     destroy,
     mesolve,
-    Options, Qobj, tensor,
+    Options, Qobj, tensor, qeye, basis,
 )
 import numpy as np
 from scipy.special import erf
 
-from utils import id_wrap_ops, construct_basis_states_list
+from utils import id_wrap_ops, construct_basis_states_list, get_map
 
 
-class SimulateGUE:
+class SimulateGUEOneWay:
     """compute the fidelity of state transfer for GUEs"""
 
     def __init__(
@@ -19,29 +22,30 @@ class SimulateGUE:
             gamma_b_dev,
             gamma_c_dev,
             cavity_dim: int = 2,
+            additional_label: bool = False,
     ):
         self.cavity_dim = cavity_dim
-        # this is for state transfer one way. think about including two way
         self.truncated_dims = 8 * [cavity_dim]
-        b1_idx = 0
-        b2_idx = 1
-        c1_idx = 2
-        c2_idx = 3
-        b1_r_idx = 4
-        b2_r_idx = 5
-        c1_r_idx = 6
-        c2_r_idx = 7
+        cav_idx_list = ["b1_idx", "b2_idx", "c1_idx", "c2_idx"]
+        tran_idx_list = ["b1_r_idx", "b2_r_idx", "c1_r_idx", "c2_r_idx"]
+        all_idx_list = cav_idx_list + tran_idx_list
+        idx_dict = dict(zip(all_idx_list, np.arange(8)))
         self.phi = -np.pi / 2
 
-        self.b1 = id_wrap_ops(destroy(cavity_dim), b1_idx, self.truncated_dims)
-        self.b2 = id_wrap_ops(destroy(cavity_dim), b2_idx, self.truncated_dims)
-        self.c1 = id_wrap_ops(destroy(cavity_dim), c1_idx, self.truncated_dims)
-        self.c2 = id_wrap_ops(destroy(cavity_dim), c2_idx, self.truncated_dims)
-
-        self.b1_r = id_wrap_ops(destroy(cavity_dim), b1_r_idx, self.truncated_dims)
-        self.b2_r = id_wrap_ops(destroy(cavity_dim), b2_r_idx, self.truncated_dims)
-        self.c1_r = id_wrap_ops(destroy(cavity_dim), c1_r_idx, self.truncated_dims)
-        self.c2_r = id_wrap_ops(destroy(cavity_dim), c2_r_idx, self.truncated_dims)
+        if not additional_label:
+            for idx in cav_idx_list:
+                setattr(self, str(idx[0:2]), id_wrap_ops(destroy(cavity_dim), idx_dict[idx], self.truncated_dims))
+            for idx in tran_idx_list:
+                setattr(self, str(idx[0:4]), id_wrap_ops(destroy(cavity_dim), idx_dict[idx], self.truncated_dims))
+        else:
+            for idx in cav_idx_list:
+                setattr(self, str(idx[0:2]), tensor(id_wrap_ops(destroy(cavity_dim), idx_dict[idx],
+                                                                self.truncated_dims),
+                                                    qeye(2)))
+            for idx in tran_idx_list:
+                setattr(self, str(idx[0:4]), tensor(id_wrap_ops(destroy(cavity_dim), idx_dict[idx],
+                                                                self.truncated_dims),
+                                                    qeye(2)))
 
         self.gamma_b_1 = gamma_b_avg + 0.5 * gamma_b_dev
         self.gamma_b_2 = gamma_b_avg - 0.5 * gamma_b_dev
@@ -136,10 +140,10 @@ class SimulateGUE:
 
     def run_state_transfer(
             self,
-            init_state,
             args,
             c_ops=None,
             e_ops=None,
+            init_state=None,
     ):
         if e_ops is None:
             e_ops = []
@@ -163,8 +167,62 @@ class SimulateGUE:
             args=args,
             e_ops=e_ops,
             options=Options(store_final_state=True, store_states=True),
-            progress_bar=True,
         )
+
+    def measurement_op_DR(self):
+        identity = qeye(self.truncated_dims+self.truncated_dims)
+        (zero_vec, ) = construct_basis_states_list([tuple(16*[0]), ], self.truncated_dims+self.truncated_dims)
+        return identity - zero_vec * zero_vec.dag()
+
+    def construct_cardinal_states(self, basis_states: list[Qobj], additional_labels: Optional[list] = None):
+        """
+        basis states should be a list of kets
+        Parameters
+        ----------
+        basis_states
+
+        Returns
+        -------
+
+        """
+        if additional_labels is not None:
+            basis_states = list([tensor(basis_state, basis(2, label))
+                                 for basis_state, label in zip(basis_states, additional_labels)])
+        cardinal_states = [state * state.dag() for state in basis_states]
+        for idx_0, state_0 in enumerate(basis_states):
+            for idx_1, state_1 in enumerate(basis_states):
+                if idx_0 < idx_1:
+                    X_plus = (state_0 + state_1).unit()
+                    Y_plus = (state_0 + 1j * state_1).unit()
+                    cardinal_states.append(X_plus * X_plus.dag())
+                    cardinal_states.append(Y_plus * Y_plus.dag())
+        return cardinal_states
+
+    def state_transfer_fidelity(self, initial_basis_states, ideal_final_basis_states, additional_labels, args, c_ops,
+                                num_cpus: int = 1):
+        """
+        Parameters
+        ----------
+        fidelity_of_photon_stt
+
+        Returns
+        -------
+        float of the state transfer fidelity. Our logical states are |0>_{R}, |0>_{L}, |1>_{R}, |1>_{L}
+        where
+        |0>_{R}=|00>, |0>_{L}=|00>, |1>_{R}=|10>+i|01>, |1>_{L}=|10>-i|01>
+        due to the structure of the Hamiltonian, the fidelity of transmitting vacuum is unity.
+        """
+        fidel = 0.0
+        initial_cardinal_states = self.construct_cardinal_states(initial_basis_states,
+                                                               additional_labels=additional_labels)
+        final_cardinal_states = self.construct_cardinal_states(ideal_final_basis_states, additional_labels=additional_labels)
+        num_states = len(initial_cardinal_states)
+        target_map = get_map(num_cpus)
+        partial_state_tran = partial(self.run_state_transfer, args, c_ops, None)
+        mesolve_results = list(target_map(partial_state_tran, initial_cardinal_states))
+        for (result, final_state) in zip(mesolve_results, final_cardinal_states):
+            fidel += np.trace(result.final_state * final_state)
+        return fidel / num_states
 
 
 class SimulateGUETwoWay:
