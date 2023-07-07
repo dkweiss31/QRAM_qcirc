@@ -16,6 +16,6 @@ param_dict = {
     "scale_c": 1.017,
     "t_half": 600,
     "B": 0.006,
-    "c": 2.8284e-5
+    "c": 2.8284e-5,
 }
 main_two_way(filepath, param_dict)

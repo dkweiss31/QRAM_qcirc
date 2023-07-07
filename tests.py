@@ -166,7 +166,9 @@ class TestSimulateBosonicOps:
             for label, state in unique_state_dict_DR.items()
         }
         for label, init_state in unique_state_dict_DR.items():
-            final_state_prop = vector_to_operator(final_DR_prop * operator_to_vector(init_state))
+            final_state_prop = vector_to_operator(
+                final_DR_prop * operator_to_vector(init_state)
+            )
             assert (
                 np.max(np.abs(final_state_prop.data - final_DR_states[label].data))
                 < 1e-4

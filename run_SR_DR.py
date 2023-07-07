@@ -23,6 +23,6 @@ param_dict = {
     "nth": 0.01,
     "postselection": True,
     "num_cpus": 8,
-    "liouvillian": False
+    "liouvillian": False,
 }
 main(filepath, param_dict)

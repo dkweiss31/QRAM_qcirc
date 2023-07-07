@@ -15,18 +15,24 @@ def id_wrap_ops(op: Qobj, idx: int, truncated_dims: list):
 
 def construct_basis_states_list(Fock_states_spec: list, truncated_dims: list):
     if type(truncated_dims) == int:
-        return [basis(truncated_dims, Fock_states_spec), ]
+        return [
+            basis(truncated_dims, Fock_states_spec),
+        ]
     basis_states = []
     for state_spec in Fock_states_spec:
         basis_list = [
-            basis(truncated_dims[i], state_spec[i])
-            for i in range(len(truncated_dims))
+            basis(truncated_dims[i], state_spec[i]) for i in range(len(truncated_dims))
         ]
         basis_states.append(tensor(*basis_list))
     return basis_states
 
 
-def project_U(U: Qobj, Fock_states_spec: list = None, truncated_dims: list = None, basis_states: list = None):
+def project_U(
+    U: Qobj,
+    Fock_states_spec: list = None,
+    truncated_dims: list = None,
+    basis_states: list = None,
+):
     if basis_states is None:
         dim_new_U = len(Fock_states_spec)
         basis_states = np.zeros((dim_new_U, np.prod(truncated_dims)), dtype=complex)
@@ -45,7 +51,9 @@ def project_U(U: Qobj, Fock_states_spec: list = None, truncated_dims: list = Non
         new_U = np.zeros((dim_new_U, dim_new_U), dtype=complex)
         for i, basis_state_0 in enumerate(basis_states):
             for j, basis_state_1 in enumerate(basis_states):
-                new_U[i, j] = (basis_state_0.dag() * U * basis_state_1).data.toarray()[0, 0]
+                new_U[i, j] = (basis_state_0.dag() * U * basis_state_1).data.toarray()[
+                    0, 0
+                ]
         return Qobj(new_U)
 
 
@@ -125,9 +133,13 @@ def generate_file_path(extension, file_name, path):
     max_numeric_prefix = -1
     for file_name_ in glob.glob(os.path.join(path, "*")):
         if f"_{file_name}.{extension}" in file_name_:
-            numeric_prefix = int(re.match(r"(\d+)_", os.path.basename(file_name_)).group(1))
+            numeric_prefix = int(
+                re.match(r"(\d+)_", os.path.basename(file_name_)).group(1)
+            )
             max_numeric_prefix = max(numeric_prefix, max_numeric_prefix)
 
     # Generate the file path.
-    file_path = os.path.join(path, f"{str(max_numeric_prefix + 1).zfill(5)}_{file_name}.{extension}")
+    file_path = os.path.join(
+        path, f"{str(max_numeric_prefix + 1).zfill(5)}_{file_name}.{extension}"
+    )
     return file_path

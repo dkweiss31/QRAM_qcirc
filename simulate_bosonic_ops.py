@@ -449,7 +449,7 @@ class SimulateBosonicOperationsDR(SimulateBosonicOperations):
         Ex:
             DR_label_1 = "1100" -> |11>|00> (order of router, input, router, input as opposed to logical ordering)
             DR_label_1 = "1001" -> |10>|01>
-            SR_label_1 = "1110" -> |11><10|
+         -> SR_label_1 = "1110" -> |11><10|
             SR_label_1 = "0001" -> |00><01|
             return |1100><1001|
         """
