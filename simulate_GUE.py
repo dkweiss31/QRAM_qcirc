@@ -1,3 +1,4 @@
+import copy
 from functools import partial
 from typing import Optional
 
@@ -33,6 +34,8 @@ class SimulateGUEOneWay:
         cav_idx_list = ["b1_idx", "b2_idx", "c1_idx", "c2_idx"]
         tran_idx_list = ["b1_r_idx", "b2_r_idx", "c1_r_idx", "c2_r_idx"]
         all_idx_list = cav_idx_list + tran_idx_list
+        for idx, label in enumerate(all_idx_list):
+            setattr(self, label, idx)
         idx_dict = dict(zip(all_idx_list, np.arange(8)))
         self.phi = -np.pi / 2
 
@@ -199,15 +202,25 @@ class SimulateGUEOneWay:
             options=Options(store_final_state=True, store_states=True),
         )
 
-    def measurement_op_DR(self):
-        identity = qeye(self.truncated_dims + self.truncated_dims)
-        (zero_vec,) = construct_basis_states_list(
-            [
-                tuple(16 * [0]),
-            ],
-            self.truncated_dims + self.truncated_dims,
-        )
-        return identity - zero_vec * zero_vec.dag()
+    def DR_basis(self, basis_states_SR):
+        return [tensor(basis_states_SR[1], basis_states_SR[0]),
+                tensor(basis_states_SR[0], basis_states_SR[1])]
+
+    def measurement_op_DR(self, idx_0, idx_1):
+        """assume idx_1 = idx_0 + 1"""
+        assert idx_1 == idx_0 + 1
+        dim_0 = self.truncated_dims[idx_0]
+        dim_1 = self.truncated_dims[idx_1]
+        right_state = (tensor(basis(dim_0, 1), basis(dim_1, 0))
+                       + 1j * tensor(basis(dim_0, 0), basis(dim_1, 1))).unit()
+        right_state_proj = right_state * right_state.dag()
+        id_list = [qeye(dim) for dim in self.truncated_dims]
+        id_with_proj = copy.deepcopy(id_list)
+        del id_with_proj[idx_0: idx_1 + 1]
+        id_with_proj.insert(idx_0, right_state_proj)
+        SR_proj = tensor(*id_with_proj)
+        other_side_id = tensor(*id_list)
+        return tensor(SR_proj, other_side_id) + tensor(other_side_id, SR_proj)
 
     def construct_cardinal_states(
         self, basis_states: list[Qobj], additional_labels: Optional[list] = None
