@@ -12,7 +12,7 @@ from qutip import (
 )
 
 from fidelity import Fidelity
-from quantum_helpers import apply_gate_to_states
+from quantum_helpers import apply_gate_to_states, Fock_prods, SWAP_op
 from simulate_bosonic_ops import SimulateBosonicOperations, SimulateBosonicOperationsDR
 from utils import id_wrap_ops, project_U, construct_basis_states_list
 
@@ -68,8 +68,14 @@ class TestSimulateBosonicOps:
             ],
             dims=[dims, dims],
         )
-        sbo_SWAP = self.sbo.SWAP_op(idx_0, idx_1, dims)
+        sbo_SWAP = SWAP_op(idx_0, idx_1, dims)
         assert true_SWAP == sbo_SWAP
+
+    def test_Fock_prod(self):
+        dim_list = [2, 3]
+        test_Fock_prods = Fock_prods(dim_list)
+        real_Fock_prods = [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)]
+        assert test_Fock_prods == real_Fock_prods
 
     def test_R_tmon(self):
         ideal_R_tmon = (-0.5 * 1j * sigmax()).expm()

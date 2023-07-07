@@ -6,14 +6,44 @@ import pathos
 import re
 
 
-def id_wrap_ops(op: Qobj, idx: int, truncated_dims: list):
+def id_wrap_ops(op: Qobj, idx: int, truncated_dims: list) -> Qobj:
+    """
+    identity wrap the operator op which has index idx in a system
+    where each subsystem has Hilbert dim as specified by truncated_dims
+    Parameters
+    ----------
+    op: Qobj
+        single subsystem operator
+    idx: int
+        position of the subsystem
+    truncated_dims: list
+        Hilbert space dimension of the subsystems
+
+    Returns
+    -------
+    Qobj
+    """
     assert op.dims[0][0] == truncated_dims[idx]
     id_list = [qeye(dim) for dim in truncated_dims]
     id_list[idx] = op
     return tensor(*id_list)
 
 
-def construct_basis_states_list(Fock_states_spec: list, truncated_dims: list):
+def construct_basis_states_list(Fock_states_spec: list[tuple], truncated_dims: list[int]) -> list[Qobj]:
+    """
+    given Fock state specifications, return corresponding kets
+    Parameters
+    ----------
+    Fock_states_spec: list[tuple]
+        Fock state specifications. Ex: [(0, 1, 0), (1, 0, 0),] for a system with three subsystems,
+        and the states requested are the excited state of the second subsystem and first subsyetm, respectively
+    truncated_dims: list[int]
+        Hilbert space dimension of the subsystems
+
+    Returns
+    -------
+    list[Qobj]
+    """
     if type(truncated_dims) == int:
         return [
             basis(truncated_dims, Fock_states_spec),

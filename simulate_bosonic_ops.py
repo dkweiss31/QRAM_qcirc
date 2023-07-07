@@ -10,7 +10,7 @@ from qutip import (
 )
 import numpy as np
 from utils import id_wrap_ops, construct_basis_states_list
-from quantum_helpers import prop_or_mesolve_factory, _Fock_prods
+from quantum_helpers import prop_or_mesolve_factory, Fock_prods, SWAP_op
 
 
 class SimulateBosonicOperations:
@@ -335,33 +335,6 @@ class SimulateBosonicOperations:
         Fock_states = construct_basis_states_list(Fock_states_spec, self.truncated_dims)
         return sum([Fock_state * Fock_state.dag() for Fock_state in Fock_states])
 
-    def SWAP_op(self, idx_0, idx_1, dims=None):
-        """SWAP between two subsystems"""
-        if dims is None:
-            dims = self.truncated_dims
-        dim_0 = dims[idx_0]
-        dim_1 = dims[idx_1]
-        Fock_prods = product(*map(_Fock_prods, [dim_0, dim_1]))
-        result = 0.0
-        for Fock_prod in Fock_prods:
-            id_list = [qeye(dim) for dim in dims]
-            (Fock_0,) = construct_basis_states_list(
-                [
-                    Fock_prod[0],
-                ],
-                dim_0,
-            )
-            (Fock_1,) = construct_basis_states_list(
-                [
-                    Fock_prod[1],
-                ],
-                dim_1,
-            )
-            id_list[idx_0] = Fock_1 * Fock_0.dag()
-            id_list[idx_1] = Fock_0 * Fock_1.dag()
-            result += tensor(*id_list)
-        return result
-
 
 class SimulateBosonicOperationsDR(SimulateBosonicOperations):
     def __init__(self, gf_tmon=True, tmon_dim=3, cavity_dim=3, control_dt=1.0):
@@ -460,4 +433,4 @@ class SimulateBosonicOperationsDR(SimulateBosonicOperations):
     def V_2_op(self):
         """see https://arxiv.org/abs/1111.6950 , operator that SWAPs the internal indices
         to properly order a tensor product of superoperators"""
-        return self.SWAP_op(1, 2, dims=4 * [self.truncated_dims])
+        return SWAP_op(1, 2, 4 * [self.truncated_dims])
