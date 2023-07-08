@@ -3,7 +3,7 @@ from main_GUE import main_one_way
 from utils import generate_file_path
 
 directory = "out"
-filepath = generate_file_path("", "GUE_state_transfer_one_way", directory)
+filepath = generate_file_path("hdf5", "GUE_state_transfer_one_way", directory)
 param_dict = {
     "gamma_b_avg": 2.0 * np.pi * 0.02,
     "gamma_c_avg": 2.0 * np.pi * 0.02,

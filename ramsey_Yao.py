@@ -10,7 +10,7 @@ from qutip import (
     Options,
     operator_to_vector,
     vector_to_operator,
-    liouvillian,
+    liouvillian, qeye,
 )
 from scipy.optimize import curve_fit
 
@@ -161,37 +161,25 @@ class RamseyExperiment:
         result = np.trace(last_pi_2.final_state * thermal_state)
         return result
 
-    def ramsey_indep(self, thermal_state, delay_times, omega_d, c_ops, num_cpus=1):
+    def ramsey_indep(self, thermal_state, delay_times, omega_d, c_ops):
         (sx, sy, sz) = self.tmon_Pauli_ops()
         H0_q = -0.5 * (self.omega_tmon - omega_d) * sz
         H = self.hamiltonian() + H0_q
         first_pi_2 = self.pi_2_pulse(H, thermal_state, c_ops)
-        if num_cpus == 1:
-            final_prob = np.zeros_like(delay_times, dtype=complex)
-            delay_dif = delay_times[1] - delay_times[0]
-            for idx, delay_time in enumerate(delay_times):
-                if idx == 0:
-                    state_after_prev_delay = first_pi_2.final_state
-                    final_state = self.pi_2_pulse(H, state_after_prev_delay, c_ops).final_state
-                else:
-                    tlist = np.linspace(0.0, delay_dif, int(delay_dif / self.control_dt))
-                    state_after_delay = mesolve(H, state_after_prev_delay, tlist, c_ops=c_ops,
-                                                options=Options(store_final_state=True)).final_state
-                    final_state = self.pi_2_pulse(H, state_after_delay, c_ops).final_state
-                    state_after_prev_delay = state_after_delay
-                final_prob[idx] = np.trace(final_state * thermal_state)
-        else:
-            target_map = get_map(num_cpus)
-
-            def _delay_mesolve(delay_time):
-                if delay_time == 0.0:
-                    return first_pi_2
-                tlist = np.linspace(0.0, delay_time, int(delay_time / self.control_dt))
-                return mesolve(H, first_pi_2.final_state, tlist, c_ops=c_ops, options=Options(store_final_state=True))
-            delay_results = list(target_map(_delay_mesolve, delay_times))
-            states_after_delay = [delay_result.final_state for delay_result in delay_results]
-            final_states = list(target_map(lambda state: self.pi_2_pulse(H, state, c_ops), states_after_delay))
-            return np.array([np.trace(state * thermal_state) for state in final_states])
+        final_prob = np.zeros_like(delay_times)
+        delay_dif = delay_times[1] - delay_times[0]
+        for idx, delay_time in enumerate(delay_times):
+            if idx == 0:
+                state_after_prev_delay = first_pi_2.final_state
+                final_state = self.pi_2_pulse(H, state_after_prev_delay, c_ops).final_state
+            else:
+                tlist = np.linspace(0.0, delay_dif, int(delay_dif / self.control_dt))
+                state_after_delay = mesolve(H, state_after_prev_delay, tlist, c_ops=c_ops,
+                                            options=Options(store_final_state=True)).final_state
+                final_state = self.pi_2_pulse(H, state_after_delay, c_ops).final_state
+                state_after_prev_delay = state_after_delay
+            final_prob[idx] = np.real(np.trace(final_state * thermal_state))
+        return final_prob
 
     def ramsey_liouv(self, thermal_state, delay_times, omega_d, c_ops):
         ramsey_results = np.zeros_like(delay_times)
@@ -200,7 +188,10 @@ class RamseyExperiment:
         H0_q = -0.5 * (self.omega_tmon - omega_d) * sz
         H = self.hamiltonian() + H0_q
         liouv_delay = (liouvillian(H, c_ops) * delay_dif).expm()
-        init_liouv_delay = (liouvillian(H, c_ops) * delay_times[0]).expm()
+        if delay_times[0] == 0.0:
+            init_liouv_delay = qeye(liouv_delay.dims[0])
+        else:
+            init_liouv_delay = (liouvillian(H, c_ops) * delay_times[0]).expm()
         for i, delay_time in enumerate(delay_times):
             if i == 0:
                 next_liouv_delay = init_liouv_delay
@@ -212,11 +203,13 @@ class RamseyExperiment:
             prev_liouv_delay = next_liouv_delay
         return ramsey_results
 
-    def plot_ramsey(self, ramsey_result, delay_times, popt_T2):
+    def plot_ramsey(self, ramsey_result, delay_times, popt_T2, filename=None):
         fig, ax = plt.subplots(figsize=(8, 4))
         plt.plot(delay_times, ramsey_result, "o")
         plot_times = np.linspace(0.0, delay_times[-1], 2000)
         plt.plot(plot_times, self.T2_func(plot_times, *popt_T2), linestyle="-")
+        if filename is not None:
+            plt.savefig(filename)
         plt.show()
 
     def extract_gammaphi(
