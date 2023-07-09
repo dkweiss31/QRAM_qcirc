@@ -7,6 +7,7 @@ from ramsey_Yao import RamseyExperiment
 def main_ramsey_two(filepath, param_dict):
     interference = param_dict["interference"]
     cavity_dim = param_dict["cavity_dim"]
+    nsteps = param_dict["nsteps"]
     tmon_dim = 2
     delay_times = np.linspace(0.0, 2000.0, 301)
     window = (0, 300)
@@ -22,32 +23,24 @@ def main_ramsey_two(filepath, param_dict):
     kappa_b = 2.0 * np.pi * 0.04784
     kappa_array = np.array([kappa_a, kappa_b])
     temp = 0.1
-    control_dt = param_dict["control_dt"]
     ramsey_experiment_two = RamseyExperiment(omega_tmon, omega_array, chi_array,
                                              kappa_array, temp,
-                                             tmon_dim, cavity_dim, 2, control_dt=control_dt)
+                                             tmon_dim, cavity_dim, 2, nsteps=nsteps)
     thermal_state = ramsey_experiment_two.obtain_thermal_state()
     if interference:
         c_ops = ramsey_experiment_two.construct_c_ops_interference()
     else:
         c_ops = ramsey_experiment_two.construct_c_ops_no_interference()
     ramsey_result = ramsey_experiment_two.ramsey_liouv(thermal_state, delay_times, omega_d, c_ops)
-    gamma_phi, popt, pcov = ramsey_experiment_two.extract_gammaphi(ramsey_result, delay_times, window=window)
+    gamma_phi_liouv, popt, pcov = ramsey_experiment_two.extract_gammaphi(ramsey_result, delay_times, window=window)
     naive_gamma_phi = sum(ramsey_experiment_two.gamma_phi_full_func(chi_array, ramsey_experiment_two.nths(), kappa_array))
-    print(f"Ramsey experiment with interference = {interference}, 2 cavities")
+    ramsey_result_indep = ramsey_experiment_two.ramsey_indep(thermal_state, delay_times, omega_d, c_ops)
+    gamma_phi_indep, popt, pcov = ramsey_experiment_two.extract_gammaphi(ramsey_result_indep, delay_times)
+    print(f"Ramsey experiment with interference = {interference}, cav_dim = {cavity_dim}, 2 cavities")
     print(f"naive gamma_phi = {naive_gamma_phi}")
-    print(f"real gamma_phi = {gamma_phi}")
-    with h5py.File(filepath, "w") as f:
-        gamma_phi = f.create_dataset("gamma_phi", data=gamma_phi)
-        for kwarg in param_dict.keys():
-            f.attrs[kwarg] = param_dict[kwarg]
-
-# start_time = time.time()
-# ramsey_result_indep = ramsey_experiment_two.ramsey_indep(thermal_state, delay_times, omega_d, c_ops)
-# end_time = time.time()
-# print(f"indep took {end_time - start_time} seconds")
-# gamma_phi, popt, pcov = ramsey_experiment_two.extract_gammaphi(ramsey_result_indep, delay_times)
-# naive_gamma_phi = sum(ramsey_experiment_two.gamma_phi_full_func(chi_array, ramsey_experiment_two.nths(), kappa_array))
-# print(f"Ramsey experiment with interference = {interference}, 2 cavities")
-# print(f"naive gamma_phi = {naive_gamma_phi}")
-# print(f"real gamma_phi = {gamma_phi}")
+    print(f"liouv gamma_phi = {gamma_phi_liouv}")
+    print(f"indep gamma_phi = {gamma_phi_indep}")
+    # with h5py.File(filepath, "w") as f:
+    #     gamma_phi = f.create_dataset("gamma_phi", data=gamma_phi)
+    #     for kwarg in param_dict.keys():
+    #         f.attrs[kwarg] = param_dict[kwarg]
