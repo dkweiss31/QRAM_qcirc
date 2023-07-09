@@ -399,29 +399,29 @@ class SimulateBosonicOperationsDR(SimulateBosonicOperations):
             final DR state constructed from final SR ops
         """
         if len(DR_label) == 1:
-            return self._DR_state_from_SR_ops(
+            return self._DR_op_from_SR_ops(
                 DR_label[0], DR_label[0], final_SR_op_dict
             )
         elif len(DR_label) == 3:
             coeff = DR_label[1]
             return (
-                self._DR_state_from_SR_ops(DR_label[0], DR_label[0], final_SR_op_dict)
-                + self._DR_state_from_SR_ops(DR_label[2], DR_label[2], final_SR_op_dict)
+                self._DR_op_from_SR_ops(DR_label[0], DR_label[0], final_SR_op_dict)
+                + self._DR_op_from_SR_ops(DR_label[2], DR_label[2], final_SR_op_dict)
                 + np.conj(coeff)
-                * self._DR_state_from_SR_ops(DR_label[0], DR_label[2], final_SR_op_dict)
+                * self._DR_op_from_SR_ops(DR_label[0], DR_label[2], final_SR_op_dict)
                 + coeff
-                * self._DR_state_from_SR_ops(DR_label[2], DR_label[0], final_SR_op_dict)
+                * self._DR_op_from_SR_ops(DR_label[2], DR_label[0], final_SR_op_dict)
             ).unit()
         else:
             raise RuntimeError("DR_label should have length 1 or 3")
 
     @staticmethod
-    def _DR_state_from_SR_ops(DR_label_1, DR_label_2, final_SR_ops):
-        """construct DR state given DR labels and dictionary of SR operators. the DR labels are assumed to be of the
+    def _DR_op_from_SR_ops(DR_label_1, DR_label_2, final_SR_ops):
+        """construct DR op given DR labels and dictionary of SR operators. the DR labels are assumed to be of the
         form e.g. '1100' to signify the ket |11>|00>. The keys of the SR dict correspond to operators:
         Ex:
             DR_label_1 = "1100" -> |11>|00> (order of router, input, router, input as opposed to logical ordering)
-            DR_label_1 = "1001" -> |10>|01>
+            DR_label_1 = "1001" -> <10|<01|
          -> SR_label_1 = "1110" -> |11><10|
             SR_label_1 = "0001" -> |00><01|
             return |1100><1001|

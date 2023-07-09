@@ -1,3 +1,4 @@
+import h5py
 from qutip import tensor, Qobj, basis, qeye, to_kraus, sigmax, sigmay, sigmaz
 import numpy as np
 import os
@@ -152,6 +153,18 @@ def get_map(num_cpus: int = 1):
 
 def calc_fidel_chi(chi_real, chi_ideal):
     return (4 * np.trace(chi_real @ chi_ideal) + np.trace(chi_real)) / 5
+
+
+def extract_info_from_h5(filepath):
+    data_dict = {}
+    read_param_dict = {}
+    with h5py.File(filepath, "r") as f:
+        for key in f.keys():
+            data = f[key][()]
+            data_dict[key] = data
+        for key in f.attrs.keys():
+            read_param_dict[key] = f.attrs[key][()]
+    return data_dict, read_param_dict
 
 
 def generate_file_path(extension, file_name, path):

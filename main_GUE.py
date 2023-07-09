@@ -1,5 +1,5 @@
 import numpy as np
-from qutip import tensor, Qobj
+from qutip import tensor
 
 from simulate_GUE import SimulateGUETwoWay, SimulateGUEOneWay
 from utils import construct_basis_states_list
@@ -78,13 +78,13 @@ def main_one_way(filepath, param_dict):
         "scale_c": scale_c,
     }
     result = guefidelity.run_state_transfer(args, c_ops=c_ops, init_state=rho_init)
-    initial_basis_states = [state_0000, state_0000, psi_init, psi_init]
-    ideal_final_basis_states = [state_0000, state_0000, psi_fin, psi_fin]
+    initial_basis_states = [state_0000, psi_init, psi_init]
+    ideal_final_basis_states = [state_0000, psi_fin, psi_fin]
     # want to simulate going to the left and to the right. These are independent
     # so we want to save resources by not simulating the whole thing. However we need to
     # signify that the initial states going in different directions are orthogonal. So we add
     # a fictitious "spin" label that ensures their orthogonality
-    additional_labels = [0, 1, 0, 1]
+    additional_labels = [0, 0, 1]
     overall_st_t_fidel = guefidelity_label.state_transfer_fidelity(
         initial_basis_states,
         ideal_final_basis_states,
@@ -93,27 +93,24 @@ def main_one_way(filepath, param_dict):
         c_ops_label,
         num_cpus=num_cpus,
     )
+    print(f"fidelity of state transfer is {overall_st_t_fidel}")
+    # TODO complete the DR calc with one way calc and one way + label calc
     zero_vec_DR = tensor(state_0000, state_0000)
-    fidel = (psi_fin.dag() * result.final_state * psi_fin).data.toarray()[0, 0]
+    fidel = np.trace(rho_fin * result.final_state)
     zero_pop_SR = (state_0000.dag() * result.final_state * state_0000).data.toarray()[
         0, 0
     ]
-    final_state_DR = tensor(result.final_state, result.final_state)
-    norm = np.trace(final_state_DR)
-    zero_pop_DR = (zero_vec_DR.dag() * final_state_DR * zero_vec_DR).data.toarray()[
+    final_state_DR_1 = tensor(result.final_state, state_0000 * state_0000.dag())
+    meas_op_DR = guefidelity.measurement_op_DR(guefidelity.c1_idx, guefidelity.c2_idx)
+    final_state_measured_DR_1 = meas_op_DR * final_state_DR_1 * meas_op_DR.dag()
+    psi_fin_DR_1 = tensor(psi_fin, state_0000 * state_0000.dag())
+    prob_1 = np.trace(final_state_measured_DR_1)
+    fidel_DR_1 = (psi_fin_DR_1.dag() * final_state_measured_DR_1 * psi_fin_DR_1).data.toarray()[
         0, 0
     ]
-    measurement_op = guefidelity.measurement_op_DR()
-    final_state_measured_DR = measurement_op * final_state_DR * measurement_op.dag()
-    psi_fin_DR = tensor(psi_fin, psi_fin)
-    prob = np.trace(final_state_measured_DR)
-    fidel_DR = (psi_fin_DR.dag() * final_state_measured_DR * psi_fin_DR).data.toarray()[
-        0, 0
-    ]
-    print(f"fidelity of state transfer is {fidel}")
     print(
         f"unnormalized fidelity, probability, and normalized fidelity of DR state transfer are "
-        f"{fidel_DR, prob, fidel_DR/prob}"
+        f"{fidel_DR_1, prob_1, fidel_DR_1/prob_1}"
     )
     qsave(result, filepath)
 
