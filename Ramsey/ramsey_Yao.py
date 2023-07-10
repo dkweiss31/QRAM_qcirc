@@ -1,6 +1,5 @@
-import numpy as np
 import matplotlib.pyplot as plt
-from scipy.constants import hbar, k
+import numpy as np
 from qutip import (
     destroy,
     sigmax,
@@ -10,11 +9,15 @@ from qutip import (
     Options,
     operator_to_vector,
     vector_to_operator,
-    liouvillian, qeye, tensor, basis,
+    liouvillian,
+    qeye,
+    tensor,
+    basis,
 )
+from scipy.constants import hbar, k
 from scipy.optimize import curve_fit
 
-from utils import id_wrap_ops, construct_basis_states_list, get_map
+from utils.utils import id_wrap_ops, construct_basis_states_list
 
 
 class RamseyExperiment:
@@ -63,7 +66,10 @@ class RamseyExperiment:
     def hamiltonian(self):
         annihilation_ops_list = self.annihilation_ops()
         (sx, sy, sz) = self.tmon_Pauli_ops()
-        H0 = sum(omega * a_op.dag() * a_op for (omega, a_op) in zip(self.omega_cavs, self.annihilation_ops()))
+        H0 = sum(
+            omega * a_op.dag() * a_op
+            for (omega, a_op) in zip(self.omega_cavs, self.annihilation_ops())
+        )
         for idx, a_op in enumerate(annihilation_ops_list):
             H0 += 0.5 * self.chi_cavstmon[idx] * a_op.dag() * a_op * sz
         return H0
@@ -99,7 +105,7 @@ class RamseyExperiment:
         return individual_lowering + individual_raising
 
     def obtain_thermal_state(
-        self, total_time: float = 100, initial_state=None, interference=True
+        self, total_time: float = 200, initial_state=None, interference=True
     ):
         if total_time < 2.0 / np.min(self.kappa_cavs):
             print("running for too short of a time to get a thermal state")
@@ -139,49 +145,35 @@ class RamseyExperiment:
 
     @staticmethod
     def gamma_phi_full_func(chi, nth, kappa):
-        return (chi**2 * nth * (1 + nth) * kappa / (kappa**2 + chi**2)) * 10**6 / (2 * np.pi)
+        return (
+            (chi**2 * nth * (1 + nth) * kappa / (kappa**2 + chi**2))
+            * 10**6
+            / (2 * np.pi)
+        )
 
-    def pi_2_pulse(
-        self, H, init_dm, c_ops, tmon_drive_amp: float = 2.0 * np.pi * 0.02
-    ):
+    def pi_2_pulse(self, H, init_dm, c_ops, tmon_drive_amp: float = 2.0 * np.pi * 0.01):
         t_pi2 = np.pi / (2 * tmon_drive_amp)
         (sx, sy, sz) = self.tmon_Pauli_ops()
         return mesolve(
-            H + 0.5 * tmon_drive_amp * sx, init_dm, (0, t_pi2), c_ops=c_ops,
-            options=Options(store_final_state=True, nsteps=self.nsteps)
+            H + 0.5 * tmon_drive_amp * sx,
+            init_dm,
+            (0, t_pi2),
+            c_ops=c_ops,
+            options=Options(store_final_state=True, nsteps=self.nsteps),
         )
 
     def ramsey_one_shot(self, H, thermal_state, liouv_delay, c_ops):
         first_pi_2 = self.pi_2_pulse(H, thermal_state, c_ops)
         state_after_delay = liouv_delay * operator_to_vector(first_pi_2.final_state)
-        last_pi_2 = self.pi_2_pulse(
-            H, vector_to_operator(state_after_delay), c_ops
-        )
+        last_pi_2 = self.pi_2_pulse(H, vector_to_operator(state_after_delay), c_ops)
         result = np.trace(last_pi_2.final_state * self.readout_proj())
         return result
 
     def readout_proj(self):
-        op_list = self.num_cavs * [qeye(self.cavity_dim)] + [basis(self.tmon_dim, 0) * basis(self.tmon_dim, 0).dag()]
+        op_list = self.num_cavs * [qeye(self.cavity_dim)] + [
+            basis(self.tmon_dim, 0) * basis(self.tmon_dim, 0).dag()
+        ]
         return tensor(*op_list)
-
-    def ramsey_indep(self, thermal_state, delay_times, omega_d, c_ops):
-        (sx, sy, sz) = self.tmon_Pauli_ops()
-        H0_q = -0.5 * (self.omega_tmon - omega_d) * sz
-        H = self.hamiltonian() + H0_q
-        first_pi_2 = self.pi_2_pulse(H, thermal_state, c_ops)
-        final_prob = np.zeros_like(delay_times)
-        delay_dif = delay_times[1] - delay_times[0]
-        for idx, delay_time in enumerate(delay_times):
-            if idx == 0:
-                state_after_prev_delay = first_pi_2.final_state
-                final_state = self.pi_2_pulse(H, state_after_prev_delay, c_ops).final_state
-            else:
-                state_after_delay = mesolve(H, state_after_prev_delay, (0, delay_dif), c_ops=c_ops,
-                                            options=Options(store_final_state=True, nsteps=self.nsteps)).final_state
-                final_state = self.pi_2_pulse(H, state_after_delay, c_ops).final_state
-                state_after_prev_delay = state_after_delay
-            final_prob[idx] = np.real(np.trace(final_state * self.readout_proj()))
-        return final_prob
 
     def liouv_idle(self, H, c_ops, idle_time):
         if idle_time == 0.0:
@@ -208,6 +200,32 @@ class RamseyExperiment:
             prev_liouv_delay = next_liouv_delay
         return ramsey_results
 
+    def ramsey_indep(self, thermal_state, delay_times, omega_d, c_ops):
+        (sx, sy, sz) = self.tmon_Pauli_ops()
+        H0_q = -0.5 * (self.omega_tmon - omega_d) * sz
+        H = self.hamiltonian() + H0_q
+        first_pi_2 = self.pi_2_pulse(H, thermal_state, c_ops)
+        final_prob = np.zeros_like(delay_times)
+        delay_dif = delay_times[1] - delay_times[0]
+        for idx, delay_time in enumerate(delay_times):
+            if idx == 0:
+                state_after_prev_delay = first_pi_2.final_state
+                final_state = self.pi_2_pulse(
+                    H, state_after_prev_delay, c_ops
+                ).final_state
+            else:
+                state_after_delay = mesolve(
+                    H,
+                    state_after_prev_delay,
+                    (0, delay_dif),
+                    c_ops=c_ops,
+                    options=Options(store_final_state=True, nsteps=self.nsteps),
+                ).final_state
+                final_state = self.pi_2_pulse(H, state_after_delay, c_ops).final_state
+                state_after_prev_delay = state_after_delay
+            final_prob[idx] = np.real(np.trace(final_state * self.readout_proj()))
+        return final_prob
+
     def plot_ramsey(self, ramsey_result, delay_times, popt_T2, filename=None):
         fig, ax = plt.subplots(figsize=(8, 4))
         plt.plot(delay_times, ramsey_result, "o")
@@ -222,7 +240,7 @@ class RamseyExperiment:
         ramsey_result,
         delay_times,
         window=None,
-        p0=(6 * 10**4, 0.045, 0.2, 0.2, -2),
+        p0=(6 * 10**4, 0.045, 0.5, 0.2, 0),
         plot=True,
     ):
         if window is None:
@@ -233,7 +251,7 @@ class RamseyExperiment:
             ramsey_result[window[0] : window[1]],
             p0=p0,
             maxfev=6000,
-            bounds=((100, -2, -2, -2, -np.pi), (10**8, 2, 2, 2, np.pi)),
+            bounds=((100, -2, -2, -2, -np.pi), (10**15, 2, 2, 2, np.pi)),
         )
         if plot:
             self.plot_ramsey(ramsey_result, delay_times, popt_T2)

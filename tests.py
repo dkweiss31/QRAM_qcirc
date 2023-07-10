@@ -13,16 +13,16 @@ from qutip import (
     Options,
 )
 
-from quantum_helpers import (
+from Ramsey.ramsey_Yao import RamseyExperiment
+from bosonic.simulate_bosonic_ops import SimulateBosonicOperations, SimulateBosonicOperationsDR
+from utils.quantum_helpers import (
     apply_gate_to_states,
     Fock_prods,
     SWAP_op,
     operators_from_states,
     operator_basis_lidar,
 )
-from ramsey_Yao import RamseyExperiment
-from simulate_bosonic_ops import SimulateBosonicOperations, SimulateBosonicOperationsDR
-from utils import id_wrap_ops, project_U, construct_basis_states_list
+from utils.utils import id_wrap_ops, project_U, construct_basis_states_list
 
 param_dict = {
     "tmon_dim": 3,
