@@ -14,6 +14,8 @@ from qutip import (
 import numpy as np
 from scipy.special import erf
 
+from dual_rail import DualRailGUEMixin
+from quantum_helpers import operator_basis_lidar
 from utils import id_wrap_ops, construct_basis_states_list, get_map
 
 
@@ -21,13 +23,13 @@ class SimulateGUEOneWay:
     """compute the fidelity of state transfer for GUEs"""
 
     def __init__(
-        self,
-        gamma_b_avg,
-        gamma_c_avg,
-        gamma_b_dev,
-        gamma_c_dev,
-        cavity_dim: int = 2,
-        additional_label: bool = False,
+            self,
+            gamma_b_avg,
+            gamma_c_avg,
+            gamma_b_dev,
+            gamma_c_dev,
+            cavity_dim: int = 2,
+            additional_label: bool = False,
     ):
         self.cavity_dim = cavity_dim
         self.truncated_dims = 8 * [cavity_dim]
@@ -87,28 +89,28 @@ class SimulateGUEOneWay:
 
     def collective_loss_ops(self):
         L_R_b = (
-            np.sqrt(self.gamma_b_1) * self.b1_r
-            - 1j * np.sqrt(self.gamma_b_2) * self.b2_r
+                np.sqrt(self.gamma_b_1) * self.b1_r
+                - 1j * np.sqrt(self.gamma_b_2) * self.b2_r
         )
         L_R_c = (
-            np.exp(-1j * self.phi)
-            * (-1j)
-            * (
-                np.sqrt(self.gamma_c_1) * self.c1_r
-                - 1j * np.sqrt(self.gamma_c_2) * self.c2_r
-            )
+                np.exp(-1j * self.phi)
+                * (-1j)
+                * (
+                        np.sqrt(self.gamma_c_1) * self.c1_r
+                        - 1j * np.sqrt(self.gamma_c_2) * self.c2_r
+                )
         )
         L_L_b = (
-            np.sqrt(self.gamma_b_1) * self.b1_r
-            + 1j * np.sqrt(self.gamma_b_2) * self.b2_r
+                np.sqrt(self.gamma_b_1) * self.b1_r
+                + 1j * np.sqrt(self.gamma_b_2) * self.b2_r
         )
         L_L_c = (
-            np.exp(1j * self.phi)
-            * 1j
-            * (
-                np.sqrt(self.gamma_c_1) * self.c1_r
-                + 1j * np.sqrt(self.gamma_c_2) * self.c2_r
-            )
+                np.exp(1j * self.phi)
+                * 1j
+                * (
+                        np.sqrt(self.gamma_c_1) * self.c1_r
+                        + 1j * np.sqrt(self.gamma_c_2) * self.c2_r
+                )
         )
         return L_R_b, L_R_c, L_L_b, L_L_c
 
@@ -142,18 +144,18 @@ class SimulateGUEOneWay:
         t_half = args["t_half"]
         scale_b = args["scale_b"]
         return (
-            scale_b
-            * np.sqrt(gamma_b)
-            * np.sqrt(
-                (
+                scale_b
+                * np.sqrt(gamma_b)
+                * np.sqrt(
+            (
                     0.5
                     * np.exp(-c * (t - t_half) ** 2)
                     / (
-                        (1 / B)
-                        - np.sqrt(np.pi / (4 * c)) * erf(np.sqrt(c) * (t - t_half))
+                            (1 / B)
+                            - np.sqrt(np.pi / (4 * c)) * erf(np.sqrt(c) * (t - t_half))
                     )
-                )
             )
+        )
         )
 
     def gamma_c_func(self, t, args=None):
@@ -172,11 +174,11 @@ class SimulateGUEOneWay:
         return H0_r, H_int_b_1, H_int_b_2, H_int_c_1, H_int_c_2
 
     def run_state_transfer(
-        self,
-        args,
-        c_ops=None,
-        e_ops=None,
-        init_state=None,
+            self,
+            args,
+            c_ops=None,
+            e_ops=None,
+            init_state=None,
     ):
         if e_ops is None:
             e_ops = []
@@ -202,9 +204,12 @@ class SimulateGUEOneWay:
             options=Options(store_final_state=True, store_states=True),
         )
 
-    def DR_basis(self, basis_states_SR):
-        return [tensor(basis_states_SR[1], basis_states_SR[0]),
-                tensor(basis_states_SR[0], basis_states_SR[1])]
+
+class SimulateGUEOneWayDR(SimulateGUEOneWay, DualRailGUEMixin):
+    def __init__(self, gamma_b_avg, gamma_c_avg, gamma_b_dev, gamma_c_dev, cavity_dim: int = 2,
+                 additional_label: bool = False, ):
+        super().__init__(gamma_b_avg, gamma_c_avg, gamma_b_dev, gamma_c_dev, cavity_dim=cavity_dim,
+                         additional_label=additional_label)
 
     def measurement_op_DR(self, idx_0, idx_1):
         """assume idx_1 = idx_0 + 1"""
@@ -222,85 +227,38 @@ class SimulateGUEOneWay:
         other_side_id = tensor(*id_list)
         return tensor(SR_proj, other_side_id) + tensor(other_side_id, SR_proj)
 
-    def construct_cardinal_states(
-        self, basis_states: list[Qobj], additional_labels: Optional[list] = None
-    ):
-        """
-        basis states should be a list of kets
-        Parameters
-        ----------
-        basis_states
+    # def _DR_state_from_SR(self, DR_label, SR_final_states):
+    #     if DR_label == "10":
+    #         return tensor(SR_final_states[1], SR_final_states[0])
+    #     if DR_label == "01":
+    #         return tensor(SR_final_states[0], SR_final_states[1])
 
-        Returns
-        -------
-
-        """
-        if additional_labels is not None:
-            basis_states = list(
-                [
-                    tensor(basis_state, basis(2, label))
-                    for basis_state, label in zip(basis_states, additional_labels)
-                ]
-            )
-        cardinal_states = [state * state.dag() for state in basis_states]
-        for idx_0, state_0 in enumerate(basis_states):
-            for idx_1, state_1 in enumerate(basis_states):
-                if idx_0 < idx_1:
-                    X_plus = (state_0 + state_1).unit()
-                    Y_plus = (state_0 + 1j * state_1).unit()
-                    cardinal_states.append(X_plus * X_plus.dag())
-                    cardinal_states.append(Y_plus * Y_plus.dag())
-        return cardinal_states
-
-    def state_transfer_fidelity(
-        self,
-        initial_basis_states,
-        ideal_final_basis_states,
-        additional_labels,
-        args,
-        c_ops,
-        num_cpus: int = 1,
-    ):
-        """
-        Parameters
-        ----------
-        fidelity_of_photon_stt
-
-        Returns
-        -------
-        float of the state transfer fidelity. Our logical states are |0>_{R}, |0>_{L}, |1>_{R}, |1>_{L}
-        where
-        |0>_{R}=|00>, |0>_{L}=|00>, |1>_{R}=|10>+i|01>, |1>_{L}=|10>-i|01>
-        due to the structure of the Hamiltonian, the fidelity of transmitting vacuum is unity.
-        """
-        fidel = 0.0
-        initial_cardinal_states = self.construct_cardinal_states(
-            initial_basis_states, additional_labels=additional_labels
-        )
-        final_cardinal_states = self.construct_cardinal_states(
-            ideal_final_basis_states, additional_labels=additional_labels
-        )
-        num_states = len(initial_cardinal_states)
-        target_map = get_map(num_cpus)
-        partial_state_tran = partial(self.run_state_transfer, args, c_ops, None)
-        mesolve_results = list(target_map(partial_state_tran, initial_cardinal_states))
-        for (result, final_state) in zip(mesolve_results, final_cardinal_states):
-            fidel += np.trace(result.final_state * final_state)
-        return fidel / num_states
+    # def construct_final_DR_state_from_SR(self, DR_label, SR_final_states):
+    #     if len(DR_label) == 1:
+    #         return self._DR_state_from_SR(DR_label[0], SR_final_states)
+    #     else:
+    #         return (self._DR_state_from_SR(DR_label[0], SR_final_states)
+    #                 + DR_label[1] * self._DR_state_from_SR(DR_label[2], SR_final_states)
+    #                 )
+    #
+    # def construct_basis_states_DR(self, basis_states_SR, ):
+    #     """assumption is these are kets"""
+    #
+    # def construct_cardinal_states_DR(self, basis_states_SR,):
 
 
 class SimulateGUETwoWay:
     """compute the fidelity of state transfer for GUEs"""
 
     def __init__(
-        self,
-        gamma_a_avg,
-        gamma_b_avg,
-        gamma_c_avg,
-        gamma_a_dev,
-        gamma_b_dev,
-        gamma_c_dev,
-        cavity_dim: int = 2,
+            self,
+            gamma_a_avg,
+            gamma_b_avg,
+            gamma_c_avg,
+            gamma_a_dev,
+            gamma_b_dev,
+            gamma_c_dev,
+            cavity_dim: int = 2,
     ):
         self.cavity_dim = cavity_dim
         # this is for state transfer one way. think about including two way
@@ -333,44 +291,44 @@ class SimulateGUETwoWay:
 
     def collective_loss_ops(self):
         L_R_a = (
-            np.sqrt(self.gamma_a_1) * self.a1_r
-            - 1j * np.sqrt(self.gamma_a_2) * self.a2_r
+                np.sqrt(self.gamma_a_1) * self.a1_r
+                - 1j * np.sqrt(self.gamma_a_2) * self.a2_r
         )
         L_R_b = (
-            np.exp(-1j * self.phiab)
-            * (-1j)
-            * (
-                np.sqrt(self.gamma_b_1) * self.b1_r
-                - 1j * np.sqrt(self.gamma_b_2) * self.b2_r
-            )
+                np.exp(-1j * self.phiab)
+                * (-1j)
+                * (
+                        np.sqrt(self.gamma_b_1) * self.b1_r
+                        - 1j * np.sqrt(self.gamma_b_2) * self.b2_r
+                )
         )
         L_R_c = (
-            np.exp(-1j * self.phiab - 1j * self.phibc)
-            * (-1j) ** 2
-            * (
-                np.sqrt(self.gamma_c_1) * self.c1_r
-                - 1j * np.sqrt(self.gamma_c_2) * self.c2_r
-            )
+                np.exp(-1j * self.phiab - 1j * self.phibc)
+                * (-1j) ** 2
+                * (
+                        np.sqrt(self.gamma_c_1) * self.c1_r
+                        - 1j * np.sqrt(self.gamma_c_2) * self.c2_r
+                )
         )
         L_L_a = (
-            np.sqrt(self.gamma_a_1) * self.a1_r
-            + 1j * np.sqrt(self.gamma_a_2) * self.a2_r
+                np.sqrt(self.gamma_a_1) * self.a1_r
+                + 1j * np.sqrt(self.gamma_a_2) * self.a2_r
         )
         L_L_b = (
-            np.exp(1j * self.phiab)
-            * 1j
-            * (
-                np.sqrt(self.gamma_b_1) * self.b1_r
-                + 1j * np.sqrt(self.gamma_b_2) * self.b2_r
-            )
+                np.exp(1j * self.phiab)
+                * 1j
+                * (
+                        np.sqrt(self.gamma_b_1) * self.b1_r
+                        + 1j * np.sqrt(self.gamma_b_2) * self.b2_r
+                )
         )
         L_L_c = (
-            np.exp(1j * (self.phiab + self.phibc))
-            * 1j**2
-            * (
-                np.sqrt(self.gamma_c_1) * self.c1_r
-                + 1j * np.sqrt(self.gamma_c_2) * self.c2_r
-            )
+                np.exp(1j * (self.phiab + self.phibc))
+                * 1j ** 2
+                * (
+                        np.sqrt(self.gamma_c_1) * self.c1_r
+                        + 1j * np.sqrt(self.gamma_c_2) * self.c2_r
+                )
         )
         return L_R_a, L_R_b, L_R_c, L_L_a, L_L_b, L_L_c
 
@@ -412,18 +370,18 @@ class SimulateGUETwoWay:
         t_half = args["t_half"]
         scale_b = args["scale_b"]
         return (
-            scale_b
-            * np.sqrt(gamma_b)
-            * np.sqrt(
-                (
+                scale_b
+                * np.sqrt(gamma_b)
+                * np.sqrt(
+            (
                     0.5
                     * np.exp(-c * (t - t_half) ** 2)
                     / (
-                        (1 / B)
-                        - np.sqrt(np.pi / (4 * c)) * erf(np.sqrt(c) * (t - t_half))
+                            (1 / B)
+                            - np.sqrt(np.pi / (4 * c)) * erf(np.sqrt(c) * (t - t_half))
                     )
-                )
             )
+        )
         )
 
     def gamma_c_func(self, t, args=None):
@@ -439,16 +397,16 @@ class SimulateGUETwoWay:
     def hamiltonian(self):
         L_R_a, L_R_b, L_R_c, L_L_a, L_L_b, L_L_c = self.collective_loss_ops()
         H0_r_half = (
-            -0.5
-            * 1j
-            * (
-                L_L_b.dag() * L_L_c
-                + L_R_c.dag() * L_R_b
-                + L_L_a.dag() * L_L_b
-                + L_R_b.dag() * L_R_a
-                + L_L_a.dag() * L_L_c
-                + L_R_c.dag() * L_R_a
-            )
+                -0.5
+                * 1j
+                * (
+                        L_L_b.dag() * L_L_c
+                        + L_R_c.dag() * L_R_b
+                        + L_L_a.dag() * L_L_b
+                        + L_R_b.dag() * L_R_a
+                        + L_L_a.dag() * L_L_c
+                        + L_R_c.dag() * L_R_a
+                )
         )
         H0_r = H0_r_half + H0_r_half.dag()
         H_int_a_1 = self.a1 * self.a1_r.dag() + self.a1.dag() * self.a1_r
@@ -460,11 +418,11 @@ class SimulateGUETwoWay:
         return H0_r, H_int_a_1, H_int_a_2, H_int_b_1, H_int_b_2, H_int_c_1, H_int_c_2
 
     def run_state_transfer(
-        self,
-        init_state,
-        args,
-        c_ops=None,
-        e_ops=None,
+            self,
+            init_state,
+            args,
+            c_ops=None,
+            e_ops=None,
     ):
         if e_ops is None:
             e_ops = []

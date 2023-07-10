@@ -9,7 +9,7 @@ from utils import (
 )
 import numpy as np
 import h5py
-from quantum_helpers import apply_gate_to_states
+from quantum_helpers import apply_gate_to_states, operator_basis_lidar, operators_from_states
 from fidelity import Fidelity
 
 
@@ -41,10 +41,11 @@ def main(filepath, param_dict):
     # computational basis states include only Fock 0, 1 and transmon 0
     g_Fock_states_spec_SR = [(i, j, 0) for i in range(2) for j in range(2)]
     labels_SR = ["00", "01", "10", "11"]
+    labels_DR = ["1100", "1001", "0110", "0011"]
     g_comp_basis_states_SR = construct_basis_states_list(
         g_Fock_states_spec_SR, truncated_dims_SR
     )
-    g_comp_basis_states_DR, labels_DR = bosonic_sim_DR.DR_basis(g_comp_basis_states_SR)
+    g_comp_basis_states_DR = bosonic_sim_DR.DR_basis(g_comp_basis_states_SR)
     # measurement operator allowing for nonideal measurement
     measurement_op_SR = (
         np.sqrt(eta_gg) * bosonic_sim_SR.measurement_op_tmon_projector(0)
@@ -73,14 +74,14 @@ def main(filepath, param_dict):
     # otherwise track only basis states of interest
     else:
         # find the states to sum over for fidelity purposes
-        op_dict_SR, unique_state_dict_SR = fidelity_SR.operator_basis_lidar()
-        op_dict_DR, unique_state_dict_DR = fidelity_DR.operator_basis_lidar()
+        op_dict_SR, unique_state_dict_SR = operator_basis_lidar(g_comp_basis_states_SR, labels_SR)
+        op_dict_DR, unique_state_dict_DR = operator_basis_lidar(g_comp_basis_states_DR, labels_DR)
         # apply the gate to each state, in parallel if desired
         U_eJP_partial = partial(bosonic_sim_SR.U_eJP_func, a, b, params, c_ops)
         final_SR = apply_gate_to_states(U_eJP_partial, unique_state_dict_SR, num_cpus)
         # construct the final dual-rail states from the computed final single rail states. to
         # do this we first reconstruct the final SR ops
-        final_SR_ops = fidelity_SR.operators_from_states(op_dict_SR, final_SR)
+        final_SR_ops = operators_from_states(op_dict_SR, final_SR)
         final_DR = {
             label: bosonic_sim_DR.DR_state_from_SR_ops(label, final_SR_ops)
             for label, state in unique_state_dict_DR.items()

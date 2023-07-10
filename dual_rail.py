@@ -1,0 +1,83 @@
+import numpy as np
+from qutip import tensor, Qobj
+
+
+class DualRailMixin:
+
+    @staticmethod
+    def DR_basis(SR_comp_bas_states):
+        # express logical DR states in terms of the basis states of the cavities
+        # basis states originally in |router, input, tmon=0>
+        # ordered as router, input, router, input
+        # |00>_{L} = |10>_{r}|10>_{i} --> |1>_{r}|1>_{i}|0>_{r}|0>_{i}
+        # |01>_{L} = |10>|01> --> |1>|0>|0>|1>
+        # |10>_{L} = |01>|10> --> |0>|1>|1>|0>
+        # |11>_{L} = |01>|01> --> |0>|0>|1>|1>
+        basis_state_DR = [
+            tensor(SR_comp_bas_states[3], SR_comp_bas_states[0]),
+            tensor(SR_comp_bas_states[2], SR_comp_bas_states[1]),
+            tensor(SR_comp_bas_states[1], SR_comp_bas_states[2]),
+            tensor(SR_comp_bas_states[0], SR_comp_bas_states[3]),
+        ]
+        return basis_state_DR
+
+    def DR_state_from_SR_ops(self, DR_label: tuple, final_SR_op_dict: dict) -> Qobj:
+        """
+        Parameters
+        ----------
+        DR_label: tuple
+            tuple either of length 1, signifying not a superposition state,
+            or of length 3 signifying a superposition state. In this case, the
+            first entry is the label of the first state, the third entry is the label
+            of the second state and the second entry is the coefficient of the second state
+        final_SR_op_dict: dict
+            dictionary of the final SR operators. labels are of the form "1100" which indicates
+            how the operator |11><00| transforms
+        Returns
+        -------
+            final DR state constructed from final SR ops
+        """
+        if len(DR_label) == 1:
+            return self._DR_op_from_SR_ops(
+                DR_label[0], DR_label[0], final_SR_op_dict
+            )
+        elif len(DR_label) == 3:
+            coeff = DR_label[1]
+            return (
+                self._DR_op_from_SR_ops(DR_label[0], DR_label[0], final_SR_op_dict)
+                + self._DR_op_from_SR_ops(DR_label[2], DR_label[2], final_SR_op_dict)
+                + np.conj(coeff)
+                * self._DR_op_from_SR_ops(DR_label[0], DR_label[2], final_SR_op_dict)
+                + coeff
+                * self._DR_op_from_SR_ops(DR_label[2], DR_label[0], final_SR_op_dict)
+            ).unit()
+        else:
+            raise RuntimeError("DR_label should have length 1 or 3")
+
+    @staticmethod
+    def _DR_op_from_SR_ops(DR_label_1, DR_label_2, final_SR_ops):
+        """construct DR op given DR labels and dictionary of SR operators. the DR labels are assumed to be of the
+        form e.g. '1100' to signify the ket |11>|00>. The keys of the SR dict correspond to operators:
+        Ex:
+            DR_label_1 = "1100" -> |11>|00> (order of router, input, router, input as opposed to logical ordering)
+            DR_label_1 = "1001" -> <10|<01|
+         -> SR_label_1 = "1110" -> |11><10|
+            SR_label_1 = "0001" -> |00><01|
+            return |1100><1001|
+        """
+        SR_label_1 = DR_label_1[0:2] + DR_label_2[0:2]
+        SR_label_2 = DR_label_1[2:4] + DR_label_2[2:4]
+        return tensor(final_SR_ops[SR_label_1], final_SR_ops[SR_label_2])
+
+
+class DualRailGUEMixin(DualRailMixin):
+
+    @staticmethod
+    def DR_basis(SR_comp_bas_states):
+        """assumption is that SR_comp_bas_states = [|0>, |1>_{R}, |1>_{L}] in terms of logical states"""
+        return [
+            tensor(SR_comp_bas_states[1], SR_comp_bas_states[0]),
+            tensor(SR_comp_bas_states[2], SR_comp_bas_states[0]),
+            tensor(SR_comp_bas_states[0], SR_comp_bas_states[1]),
+            tensor(SR_comp_bas_states[0], SR_comp_bas_states[2]),
+        ]

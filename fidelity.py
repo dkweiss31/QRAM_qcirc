@@ -4,6 +4,8 @@ from qutip import (
     vector_to_operator,
 )
 import numpy as np
+
+from quantum_helpers import operator_basis_lidar
 from utils import project_U
 
 
@@ -25,106 +27,6 @@ class Fidelity:
             self.label_list = range(len(basis_states))
         else:
             self.label_list = label_list
-
-    def operator_basis_lidar(self) -> (dict, dict):
-        """
-
-        Returns
-        -------
-            a tuple of dictionaries. The first dictionary contains information on the operators
-            whose evolution we want to track. The keys correspond to the coherence, e.g. "12"
-            for the coherence |1><2| or 11 for the "coherence" |1><1|. The values are tuples containing
-            four pieces of information. first the operator in question, next a tuple of coefficients
-            in the state decomposition (really density matrices, but call them "states" to differentiate from the
-            operator coherences which are not density matrices) of the operator, next is those states,
-            and finally a tuple of labels corresponding to the states.
-        """
-        op_dict = {}
-        unique_state_dict = {}
-        for i, ket_0 in enumerate(self.basis_states):
-            for j, ket_1 in enumerate(self.basis_states):
-                if i == j:
-                    label = self.label_list[i]
-                    op_dict[label + label] = (
-                        ket_0 * ket_0.dag(),
-                        (1.0,),
-                        (ket_0 * ket_0.dag(),),
-                        ((label,),),
-                    )
-                    if (label,) not in unique_state_dict:
-                        unique_state_dict[(label,)] = ket_0 * ket_0.dag()
-                else:
-                    # slight inefficiency rn is that |ij> + |kl> and |ij> + |kl> get recorded as different states
-                    pl_state = (ket_0 + ket_1).unit()
-                    min_state = (ket_0 + 1j * ket_1).unit()
-                    new_states = (
-                        pl_state * pl_state.dag(),
-                        min_state * min_state.dag(),
-                        ket_0 * ket_0.dag(),
-                        ket_1 * ket_1.dag(),
-                    )
-                    alpha_coeffs = (1, 1j, -0.5 * (1 + 1j), -0.5 * (1 + 1j))
-                    label_0 = self.label_list[i]
-                    label_1 = self.label_list[j]
-                    new_labels = (
-                        (
-                            label_0,
-                            1,
-                            label_1,
-                        ),
-                        (
-                            label_0,
-                            1j,
-                            label_1,
-                        ),
-                        (label_0,),
-                        (label_1,),
-                    )
-                    op_dict[label_0 + label_1] = (
-                        ket_0 * ket_1.dag(),
-                        alpha_coeffs,
-                        new_states,
-                        new_labels,
-                    )
-                    unique_state_dict.update(
-                        {
-                            new_labels[k]: state
-                            for k, state in enumerate(new_states)
-                            if k not in unique_state_dict
-                        }
-                    )
-                    assert ket_0 * ket_1.dag() == sum(
-                        [
-                            alpha_coeffs[i] * new_states[i]
-                            for i in range(len(alpha_coeffs))
-                        ]
-                    )
-        return op_dict, unique_state_dict
-
-    @staticmethod
-    def operators_from_states(op_dict, unique_state_dict):
-        """
-        reconstruct operators from the decomposition as obtained in operator_basis_lidar
-        Parameters
-        ----------
-        op_dict: dict
-            dictionary of operators as defined in operator_basis_lidar
-        unique_state_dict: dict
-            dictionary of states as defined in operator_basis_lidar. The use case in mind is that the
-            initial states have been mapped to final states, and we now want to reconstruct how the
-            operators evolve
-        Returns
-        -------
-        dict
-
-        """
-        return {
-            key: sum(
-                coeffs[idx] * unique_state_dict[label]
-                for idx, label in enumerate(labels)
-            )
-            for key, (op, coeffs, rhos, labels) in op_dict.items()
-        }
 
     @staticmethod
     def process_fidelity_nielsen(entanglement_fidelity, num_qubits=2):
@@ -162,7 +64,7 @@ class Fidelity:
 
         """
         dim = 2**num_qubits
-        op_dict, unique_state_dict = self.operator_basis_lidar()
+        op_dict, unique_state_dict = operator_basis_lidar(self.basis_states, self.label_list)
         overall_contr = 0.0
         total_prob = 0.0
         # TODO want to change num_states indexing so that we only sum over unique states

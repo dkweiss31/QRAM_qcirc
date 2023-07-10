@@ -53,6 +53,109 @@ def apply_gate_to_states(gate: Callable, states_dict: dict, num_cpus: int = 1) -
     return dict(zip(states_dict.keys(), mapped_states))
 
 
+def operator_basis_lidar(basis_states, label_list=None) -> (dict, dict):
+    """
+
+    Returns
+    -------
+        a tuple of dictionaries. The first dictionary contains information on the operators
+        whose evolution we want to track. The keys correspond to the coherence, e.g. "12"
+        for the coherence |1><2| or 11 for the "coherence" |1><1|. The values are tuples containing
+        four pieces of information. first the operator in question, next a tuple of coefficients
+        in the state decomposition (really density matrices, but call them "states" to differentiate from the
+        operator coherences which are not density matrices) of the operator, next is those states,
+        and finally a tuple of labels corresponding to the states.
+    """
+    op_dict = {}
+    unique_state_dict = {}
+    if label_list is None:
+        label_list = range(len(basis_states))
+    for i, ket_0 in enumerate(basis_states):
+        for j, ket_1 in enumerate(basis_states):
+            if i == j:
+                label = label_list[i]
+                op_dict[label + label] = (
+                    ket_0 * ket_0.dag(),
+                    (1.0,),
+                    (ket_0 * ket_0.dag(),),
+                    ((label,),),
+                )
+                if (label,) not in unique_state_dict:
+                    unique_state_dict[(label,)] = ket_0 * ket_0.dag()
+            else:
+                # slight inefficiency rn is that |ij> + |kl> and |ij> + |kl> get recorded as different states
+                pl_state = (ket_0 + ket_1).unit()
+                min_state = (ket_0 + 1j * ket_1).unit()
+                new_states = (
+                    pl_state * pl_state.dag(),
+                    min_state * min_state.dag(),
+                    ket_0 * ket_0.dag(),
+                    ket_1 * ket_1.dag(),
+                )
+                alpha_coeffs = (1, 1j, -0.5 * (1 + 1j), -0.5 * (1 + 1j))
+                label_0 = label_list[i]
+                label_1 = label_list[j]
+                new_labels = (
+                    (
+                        label_0,
+                        1,
+                        label_1,
+                    ),
+                    (
+                        label_0,
+                        1j,
+                        label_1,
+                    ),
+                    (label_0,),
+                    (label_1,),
+                )
+                op_dict[label_0 + label_1] = (
+                    ket_0 * ket_1.dag(),
+                    alpha_coeffs,
+                    new_states,
+                    new_labels,
+                )
+                unique_state_dict.update(
+                    {
+                        new_labels[k]: state
+                        for k, state in enumerate(new_states)
+                        if k not in unique_state_dict
+                    }
+                )
+                assert ket_0 * ket_1.dag() == sum(
+                    [
+                        alpha_coeffs[i] * new_states[i]
+                        for i in range(len(alpha_coeffs))
+                    ]
+                )
+    return op_dict, unique_state_dict
+
+
+def operators_from_states(op_dict, unique_state_dict):
+    """
+    reconstruct operators from the decomposition as obtained in operator_basis_lidar
+    Parameters
+    ----------
+    op_dict: dict
+        dictionary of operators as defined in operator_basis_lidar
+    unique_state_dict: dict
+        dictionary of states as defined in operator_basis_lidar. The use case in mind is that the
+        initial states have been mapped to final states, and we now want to reconstruct how the
+        operators evolve
+    Returns
+    -------
+    dict
+
+    """
+    return {
+        key: sum(
+            coeffs[idx] * unique_state_dict[label]
+            for idx, label in enumerate(labels)
+        )
+        for key, (op, coeffs, rhos, labels) in op_dict.items()
+    }
+
+
 def SWAP_op(idx_0, idx_1, truncated_dims):
     """SWAP between two subsystems"""
     dim_0 = truncated_dims[idx_0]
