@@ -3,7 +3,11 @@ from functools import partial
 import numpy as np
 from qutip import tensor, basis
 
-from quantum_helpers import operator_basis_lidar, apply_gate_to_states, operators_from_states
+from quantum_helpers import (
+    operator_basis_lidar,
+    apply_gate_to_states,
+    operators_from_states,
+)
 from simulate_GUE import SimulateGUETwoWay, SimulateGUEOneWay, SimulateGUEOneWayDR
 from utils import construct_basis_states_list, get_map
 from qutip.fileio import qsave
@@ -93,36 +97,54 @@ def main_one_way(filepath, param_dict):
 
     def append_label(states, labels):
         return list(
-            [
-                tensor(state, basis(2, label))
-                for state, label in zip(states, labels)
-            ]
+            [tensor(state, basis(2, label)) for state, label in zip(states, labels)]
         )
+
     additional_labels = [0, 0, 1]  # vacuum then right and left
-    initial_basis_states = append_label([state_0000, psi_init, psi_init], additional_labels)
-    ideal_final_basis_states = append_label([state_0000, psi_fin, psi_fin], additional_labels)
+    initial_basis_states = append_label(
+        [state_0000, psi_init, psi_init], additional_labels
+    )
+    ideal_final_basis_states = append_label(
+        [state_0000, psi_fin, psi_fin], additional_labels
+    )
     # want to simulate going to the left and to the right. These are independent
     # so we want to save resources by not simulating the whole thing. However we need to
     # signify that the initial states going in different directions are orthogonal. So we add
     # a fictitious "spin" label that ensures their orthogonality
     label_list_SR = ["0R", "1R", "1L"]
     label_list_DR = ["1R0R", "1L0R", "0R1R", "0R1L"]
-    op_dict_SR, initial_cardinal_states = operator_basis_lidar(initial_basis_states, label_list=label_list_SR)
-    _, ideal_final_cardinal_states = operator_basis_lidar(ideal_final_basis_states, label_list=label_list_SR)
+    op_dict_SR, initial_cardinal_states = operator_basis_lidar(
+        initial_basis_states, label_list=label_list_SR
+    )
+    _, ideal_final_cardinal_states = operator_basis_lidar(
+        ideal_final_basis_states, label_list=label_list_SR
+    )
     num_states = len(initial_cardinal_states)
     # first calc state transfer fidel in the SR case
-    partial_state_tran = partial(guefidelity_label.run_state_transfer, args, c_ops_label, None)
-    final_SR = apply_gate_to_states(partial_state_tran, initial_cardinal_states, num_cpus)
+    partial_state_tran = partial(
+        guefidelity_label.run_state_transfer, args, c_ops_label, None
+    )
+    final_SR = apply_gate_to_states(
+        partial_state_tran, initial_cardinal_states, num_cpus
+    )
     fidel_SR = 0.0
-    for (real_final_result, ideal_final_state) in zip(final_SR.values(), ideal_final_cardinal_states.values()):
+    for (real_final_result, ideal_final_state) in zip(
+        final_SR.values(), ideal_final_cardinal_states.values()
+    ):
         fidel_SR += np.trace(real_final_result.final_state * ideal_final_state)
     fidel_SR = fidel_SR / num_states
     print(f"fidelity of SR state transfer is {fidel_SR}")
     # now for DR
     initial_basis_states_DR = guefidelity_label_DR.DR_basis(initial_basis_states)
-    ideal_final_basis_states_DR = guefidelity_label_DR.DR_basis(ideal_final_basis_states)
-    op_dict_DR, unique_state_dict_DR = operator_basis_lidar(initial_basis_states_DR, label_list=label_list_DR)
-    _, ideal_final_cardinal_states_DR = operator_basis_lidar(ideal_final_basis_states_DR, label_list=label_list_DR)
+    ideal_final_basis_states_DR = guefidelity_label_DR.DR_basis(
+        ideal_final_basis_states
+    )
+    op_dict_DR, unique_state_dict_DR = operator_basis_lidar(
+        initial_basis_states_DR, label_list=label_list_DR
+    )
+    _, ideal_final_cardinal_states_DR = operator_basis_lidar(
+        ideal_final_basis_states_DR, label_list=label_list_DR
+    )
     final_SR_ops = operators_from_states(op_dict_SR, final_SR)
     final_DR_states = {
         label: guefidelity_label_DR.DR_state_from_SR_ops(label, final_SR_ops)
@@ -130,9 +152,12 @@ def main_one_way(filepath, param_dict):
     }
     fidel_DR = 0.0
     total_prob = 0.0
-    for (real_final_result, ideal_final_state) in zip(final_DR_states.values(),
-                                                      ideal_final_cardinal_states_DR.values()):
-        meas_op_DR = guefidelity_label_DR.measurement_op_DR(guefidelity.c1_idx, guefidelity.c2_idx)
+    for (real_final_result, ideal_final_state) in zip(
+        final_DR_states.values(), ideal_final_cardinal_states_DR.values()
+    ):
+        meas_op_DR = guefidelity_label_DR.measurement_op_DR(
+            guefidelity.c1_idx, guefidelity.c2_idx
+        )
         meas_final_state = meas_op_DR * real_final_result.final_state * meas_op_DR.dag()
         prob = np.trace(meas_final_state)
         total_prob += prob

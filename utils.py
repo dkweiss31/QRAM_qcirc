@@ -30,7 +30,9 @@ def id_wrap_ops(op: Qobj, idx: int, truncated_dims: list) -> Qobj:
     return tensor(*id_list)
 
 
-def construct_basis_states_list(Fock_states_spec: list[tuple], truncated_dims: list[int]) -> list[Qobj]:
+def construct_basis_states_list(
+    Fock_states_spec: list[tuple], truncated_dims: list[int]
+) -> list[Qobj]:
     """
     given Fock state specifications, return corresponding kets
     Parameters

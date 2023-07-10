@@ -64,7 +64,9 @@ class Fidelity:
 
         """
         dim = 2**num_qubits
-        op_dict, unique_state_dict = operator_basis_lidar(self.basis_states, self.label_list)
+        op_dict, unique_state_dict = operator_basis_lidar(
+            self.basis_states, self.label_list
+        )
         overall_contr = 0.0
         total_prob = 0.0
         # TODO want to change num_states indexing so that we only sum over unique states

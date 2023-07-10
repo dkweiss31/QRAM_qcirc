@@ -8,10 +8,18 @@ from qutip import (
     operator_to_vector,
     vector_to_operator,
     tensor,
-    to_super, mesolve, Options,
+    to_super,
+    mesolve,
+    Options,
 )
 
-from quantum_helpers import apply_gate_to_states, Fock_prods, SWAP_op, operators_from_states, operator_basis_lidar
+from quantum_helpers import (
+    apply_gate_to_states,
+    Fock_prods,
+    SWAP_op,
+    operators_from_states,
+    operator_basis_lidar,
+)
 from ramsey_Yao import RamseyExperiment
 from simulate_bosonic_ops import SimulateBosonicOperations, SimulateBosonicOperationsDR
 from utils import id_wrap_ops, project_U, construct_basis_states_list
@@ -156,13 +164,17 @@ class TestSimulateBosonicOps:
         # DR tests. want to compare the method of directly computing the superoperator
         # to that of combining individual SR final states
         g_comp_basis_states_DR = self.sbodr.DR_basis(g_comp_basis_states_SR)
-        op_dict_DR, unique_state_dict_DR = operator_basis_lidar(g_comp_basis_states_DR, labels_DR)
+        op_dict_DR, unique_state_dict_DR = operator_basis_lidar(
+            g_comp_basis_states_DR, labels_DR
+        )
         U_eJP_DR = tensor(U_eJP_SR, U_eJP_SR)
         V2 = self.sbodr.V_2_op()
         DR_dims = to_super(tensor(U_eJP_ideal_SR, U_eJP_ideal_SR)).dims
         final_DR_prop = Qobj(V2.dag().data @ U_eJP_DR.data @ V2.data, dims=DR_dims)
         # construct SR final states and ops
-        op_dict_SR, unique_state_dict_SR = operator_basis_lidar(g_comp_basis_states_SR, labels_SR)
+        op_dict_SR, unique_state_dict_SR = operator_basis_lidar(
+            g_comp_basis_states_SR, labels_SR
+        )
         U_eJP_partial = partial(self.sbo.U_eJP_func, a, b, params, c_ops)
         final_SR = apply_gate_to_states(U_eJP_partial, unique_state_dict_SR, 8)
         final_SR_ops = operators_from_states(op_dict_SR, final_SR)

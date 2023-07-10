@@ -9,7 +9,11 @@ from utils import (
 )
 import numpy as np
 import h5py
-from quantum_helpers import apply_gate_to_states, operator_basis_lidar, operators_from_states
+from quantum_helpers import (
+    apply_gate_to_states,
+    operator_basis_lidar,
+    operators_from_states,
+)
 from fidelity import Fidelity
 
 
@@ -74,8 +78,12 @@ def main(filepath, param_dict):
     # otherwise track only basis states of interest
     else:
         # find the states to sum over for fidelity purposes
-        op_dict_SR, unique_state_dict_SR = operator_basis_lidar(g_comp_basis_states_SR, labels_SR)
-        op_dict_DR, unique_state_dict_DR = operator_basis_lidar(g_comp_basis_states_DR, labels_DR)
+        op_dict_SR, unique_state_dict_SR = operator_basis_lidar(
+            g_comp_basis_states_SR, labels_SR
+        )
+        op_dict_DR, unique_state_dict_DR = operator_basis_lidar(
+            g_comp_basis_states_DR, labels_DR
+        )
         # apply the gate to each state, in parallel if desired
         U_eJP_partial = partial(bosonic_sim_SR.U_eJP_func, a, b, params, c_ops)
         final_SR = apply_gate_to_states(U_eJP_partial, unique_state_dict_SR, num_cpus)

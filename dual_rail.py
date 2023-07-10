@@ -3,7 +3,6 @@ from qutip import tensor, Qobj
 
 
 class DualRailMixin:
-
     @staticmethod
     def DR_basis(SR_comp_bas_states):
         # express logical DR states in terms of the basis states of the cavities
@@ -38,9 +37,7 @@ class DualRailMixin:
             final DR state constructed from final SR ops
         """
         if len(DR_label) == 1:
-            return self._DR_op_from_SR_ops(
-                DR_label[0], DR_label[0], final_SR_op_dict
-            )
+            return self._DR_op_from_SR_ops(DR_label[0], DR_label[0], final_SR_op_dict)
         elif len(DR_label) == 3:
             coeff = DR_label[1]
             return (
@@ -71,7 +68,6 @@ class DualRailMixin:
 
 
 class DualRailGUEMixin(DualRailMixin):
-
     @staticmethod
     def DR_basis(SR_comp_bas_states):
         """assumption is that SR_comp_bas_states = [|0>, |1>_{R}, |1>_{L}] in terms of logical states"""

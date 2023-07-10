@@ -6,7 +6,9 @@ from qutip import (
     Qobj,
     liouvillian,
     mesolve,
-    Options, qeye, tensor,
+    Options,
+    qeye,
+    tensor,
 )
 from utils import get_map, construct_basis_states_list
 
@@ -123,10 +125,7 @@ def operator_basis_lidar(basis_states, label_list=None) -> (dict, dict):
                     }
                 )
                 assert ket_0 * ket_1.dag() == sum(
-                    [
-                        alpha_coeffs[i] * new_states[i]
-                        for i in range(len(alpha_coeffs))
-                    ]
+                    [alpha_coeffs[i] * new_states[i] for i in range(len(alpha_coeffs))]
                 )
     return op_dict, unique_state_dict
 
@@ -149,8 +148,7 @@ def operators_from_states(op_dict, unique_state_dict):
     """
     return {
         key: sum(
-            coeffs[idx] * unique_state_dict[label]
-            for idx, label in enumerate(labels)
+            coeffs[idx] * unique_state_dict[label] for idx, label in enumerate(labels)
         )
         for key, (op, coeffs, rhos, labels) in op_dict.items()
     }
