@@ -158,7 +158,9 @@ def calc_fidel_chi(chi_real, chi_ideal):
     return (4 * np.trace(chi_real @ chi_ideal) + np.trace(chi_real)) / 5
 
 
-def write_to_h5(filepath, data_dict, param_dict):
+def write_to_h5(filepath, data_dict, param_dict, loud=True):
+    if loud:
+        print(f"writing data to {filepath}")
     with h5py.File(filepath, "w") as f:
         for key, val in data_dict.items():
             written_data = f.create_dataset(key, data=val)

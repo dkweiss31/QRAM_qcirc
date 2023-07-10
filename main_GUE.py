@@ -24,6 +24,8 @@ def main_one_way(filepath, param_dict):
     num_cpus = param_dict["num_cpus"]
     Gamma_1_cav = param_dict["Gamma_1_cav"]
     Gamma_1_transfer_nr = param_dict["Gamma_1_transfer_nr"]
+    Gamma_phi_cav = param_dict["Gamma_phi_cav"]
+    Gamma_phi_transfer = param_dict["Gamma_phi_transfer"]
     nth = param_dict["nth"]
     cavity_dim = 2
     guefidelity_label = SimulateGUEOneWay(
@@ -63,7 +65,8 @@ def main_one_way(filepath, param_dict):
     psi_init = (state_1000 + 1j * state_0100).unit()
     psi_fin = (state_0010 + 1j * state_0001).unit()
     c_ops = guefidelity_label.construct_c_ops(
-        Gamma_1_cav=Gamma_1_cav, Gamma_1_transfer_nr=Gamma_1_transfer_nr, nth=nth
+        Gamma_1_cav=Gamma_1_cav, Gamma_1_transfer_nr=Gamma_1_transfer_nr,
+        Gamma_phi_cav=Gamma_phi_cav, Gamma_phi_transfer=Gamma_phi_transfer, nth=nth,
     )
     pulse_args = {
         "c": c,
