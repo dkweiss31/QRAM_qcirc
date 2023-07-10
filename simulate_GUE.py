@@ -1,22 +1,18 @@
 import copy
-from functools import partial
-from typing import Optional
 
 from qutip import (
     destroy,
     mesolve,
     Options,
-    Qobj,
     tensor,
     qeye,
-    basis,
+    basis, Qobj,
 )
 import numpy as np
 from scipy.special import erf
 
 from dual_rail import DualRailGUEMixin
-from quantum_helpers import operator_basis_lidar
-from utils import id_wrap_ops, construct_basis_states_list, get_map
+from utils import id_wrap_ops
 
 
 class SimulateGUEOneWay:
@@ -32,6 +28,7 @@ class SimulateGUEOneWay:
         additional_label: bool = False,
     ):
         self.cavity_dim = cavity_dim
+        self.additional_label = additional_label
         self.truncated_dims = 8 * [cavity_dim]
         cav_idx_list = ["b1_idx", "b2_idx", "c1_idx", "c2_idx"]
         tran_idx_list = ["b1_r_idx", "b2_r_idx", "c1_r_idx", "c2_r_idx"]
@@ -202,7 +199,23 @@ class SimulateGUEOneWay:
             args=args,
             e_ops=e_ops,
             options=Options(store_final_state=True, store_states=True),
-        )
+        ).final_state
+
+    @staticmethod
+    def state_transfer_fidelity(real_final_states: dict, ideal_final_cardinal_states: dict, measurement_op: Qobj =
+    None):
+        fidel = 0.0
+        total_prob = 0.0
+        num_states = len(ideal_final_cardinal_states)
+        for (real_final_state, ideal_final_state) in zip(
+                real_final_states.values(), ideal_final_cardinal_states.values()
+        ):
+            if measurement_op is not None:
+                real_final_state = measurement_op * real_final_state * measurement_op.dag()
+                prob = np.trace(real_final_state)
+                total_prob += prob
+            fidel += np.trace(real_final_state * ideal_final_state)
+        return fidel / num_states, total_prob / num_states
 
 
 class SimulateGUEOneWayDR(SimulateGUEOneWay, DualRailGUEMixin):
@@ -235,31 +248,16 @@ class SimulateGUEOneWayDR(SimulateGUEOneWay, DualRailGUEMixin):
         ).unit()
         right_state_proj = right_state * right_state.dag()
         id_list = [qeye(dim) for dim in self.truncated_dims]
+        if self.additional_label:
+            id_list.append(qeye(2))
         id_with_proj = copy.deepcopy(id_list)
-        del id_with_proj[idx_0 : idx_1 + 1]
+        # delete the two entries corresponding to the GUE, as
+        # the subsystem operator is right_state_proj
+        del id_with_proj[idx_0: idx_1 + 1]
         id_with_proj.insert(idx_0, right_state_proj)
         SR_proj = tensor(*id_with_proj)
         other_side_id = tensor(*id_list)
         return tensor(SR_proj, other_side_id) + tensor(other_side_id, SR_proj)
-
-    # def _DR_state_from_SR(self, DR_label, SR_final_states):
-    #     if DR_label == "10":
-    #         return tensor(SR_final_states[1], SR_final_states[0])
-    #     if DR_label == "01":
-    #         return tensor(SR_final_states[0], SR_final_states[1])
-
-    # def construct_final_DR_state_from_SR(self, DR_label, SR_final_states):
-    #     if len(DR_label) == 1:
-    #         return self._DR_state_from_SR(DR_label[0], SR_final_states)
-    #     else:
-    #         return (self._DR_state_from_SR(DR_label[0], SR_final_states)
-    #                 + DR_label[1] * self._DR_state_from_SR(DR_label[2], SR_final_states)
-    #                 )
-    #
-    # def construct_basis_states_DR(self, basis_states_SR, ):
-    #     """assumption is these are kets"""
-    #
-    # def construct_cardinal_states_DR(self, basis_states_SR,):
 
 
 class SimulateGUETwoWay:
