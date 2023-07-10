@@ -1,20 +1,20 @@
 from functools import partial
 
-from qutip import tensor, destroy, Qobj, to_super, qeye
-from simulate_bosonic_ops import SimulateBosonicOperations, SimulateBosonicOperationsDR
-from utils import (
-    id_wrap_ops,
-    construct_basis_states_list,
-    project_U,
-)
 import numpy as np
-import h5py
+from qutip import tensor, destroy, Qobj, to_super, qeye
+
+from fidelity import Fidelity
 from quantum_helpers import (
     apply_gate_to_states,
     operator_basis_lidar,
     operators_from_states,
 )
-from fidelity import Fidelity
+from simulate_bosonic_ops import SimulateBosonicOperations, SimulateBosonicOperationsDR
+from utils import (
+    id_wrap_ops,
+    construct_basis_states_list,
+    project_U, write_to_h5,
+)
 
 
 def main(filepath, param_dict):
@@ -116,10 +116,6 @@ def main(filepath, param_dict):
     print(f"success probability single rail: {prob_SR}")
     print(f"entanglement fidelity dual rail: {e_fidel_DR}")
     print(f"success probability dual rail: {prob_DR}")
-    with h5py.File(filepath, "w") as f:
-        e_fidel_SR = f.create_dataset("e_fidel_SR", data=e_fidel_SR)
-        e_fidel_DR = f.create_dataset("e_fidel_DR", data=e_fidel_DR)
-        prob_SR = f.create_dataset("prob_SR", data=prob_SR)
-        prob_DR = f.create_dataset("prob_DR", data=prob_DR)
-        for kwarg in param_dict.keys():
-            f.attrs[kwarg] = param_dict[kwarg]
+    data_dict = {"e_fidel_SR": e_fidel_SR, "e_fidel_DR": e_fidel_DR,
+                 "prob_SR": prob_SR, "prob_DR": prob_DR}
+    write_to_h5(filepath, data_dict, param_dict)

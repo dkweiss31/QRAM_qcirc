@@ -1,5 +1,4 @@
-import copy
-
+import numpy as np
 from qutip import (
     destroy,
     mesolve,
@@ -8,7 +7,6 @@ from qutip import (
     qeye,
     basis, Qobj,
 )
-import numpy as np
 from scipy.special import erf
 
 from dual_rail import DualRailGUEMixin
@@ -211,8 +209,11 @@ class SimulateGUEOneWay:
                 real_final_states.values(), ideal_final_cardinal_states.values()
         ):
             if measurement_op is not None:
+                norm = np.trace(real_final_state)
+                print(norm)
                 real_final_state = measurement_op * real_final_state * measurement_op.dag()
                 prob = np.trace(real_final_state)
+                real_final_state = real_final_state / prob
                 total_prob += prob
             fidel += np.trace(real_final_state * ideal_final_state)
         return fidel / num_states, total_prob / num_states
@@ -237,27 +238,32 @@ class SimulateGUEOneWayDR(SimulateGUEOneWay, DualRailGUEMixin):
             additional_label=additional_label,
         )
 
-    def measurement_op_DR(self, idx_0, idx_1):
-        """assume idx_1 = idx_0 + 1"""
+    def rightward_state(self, idx_0, idx_1):
         assert idx_1 == idx_0 + 1
         dim_0 = self.truncated_dims[idx_0]
         dim_1 = self.truncated_dims[idx_1]
         right_state = (
-            tensor(basis(dim_0, 1), basis(dim_1, 0))
-            + 1j * tensor(basis(dim_0, 0), basis(dim_1, 1))
+                tensor(basis(dim_0, 1), basis(dim_1, 0))
+                + 1j * tensor(basis(dim_0, 0), basis(dim_1, 1))
         ).unit()
+        return right_state
+
+    def measurement_op_DR(self, idx_0, idx_1):
+        # assume below that we've traced out non interesting d.o.fs
+        assert idx_1 == idx_0 + 1
+        dim_0 = self.truncated_dims[idx_0]
+        dim_1 = self.truncated_dims[idx_1]
+        right_state = self.rightward_state(idx_0, idx_1)
         right_state_proj = right_state * right_state.dag()
-        id_list = [qeye(dim) for dim in self.truncated_dims]
+        left_state_proj = right_state_proj
         if self.additional_label:
-            id_list.append(qeye(2))
-        id_with_proj = copy.deepcopy(id_list)
-        # delete the two entries corresponding to the GUE, as
-        # the subsystem operator is right_state_proj
-        del id_with_proj[idx_0: idx_1 + 1]
-        id_with_proj.insert(idx_0, right_state_proj)
-        SR_proj = tensor(*id_with_proj)
-        other_side_id = tensor(*id_list)
-        return tensor(SR_proj, other_side_id) + tensor(other_side_id, SR_proj)
+            right_state_proj = tensor(right_state_proj, basis(2, 0) * basis(2, 0).dag())
+            left_state_proj = tensor(left_state_proj, basis(2, 1) * basis(2, 1).dag())
+            id_op = tensor(qeye([dim_0, dim_1]), qeye(2))
+        else:
+            id_op = qeye([dim_0, dim_1])
+        return (tensor(right_state_proj, id_op) + tensor(id_op, right_state_proj)
+                + tensor(left_state_proj, id_op) + tensor(id_op, left_state_proj))
 
 
 class SimulateGUETwoWay:

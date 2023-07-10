@@ -1,10 +1,11 @@
-import h5py
-from qutip import tensor, Qobj, basis, qeye, to_kraus, sigmax, sigmay, sigmaz
-import numpy as np
-import os
 import glob
-import pathos
+import os
 import re
+
+import h5py
+import numpy as np
+import pathos
+from qutip import tensor, Qobj, basis, qeye, to_kraus, sigmax, sigmay, sigmaz
 
 
 def id_wrap_ops(op: Qobj, idx: int, truncated_dims: list) -> Qobj:
@@ -155,6 +156,14 @@ def get_map(num_cpus: int = 1):
 
 def calc_fidel_chi(chi_real, chi_ideal):
     return (4 * np.trace(chi_real @ chi_ideal) + np.trace(chi_real)) / 5
+
+
+def write_to_h5(filepath, data_dict, param_dict):
+    with h5py.File(filepath, "w") as f:
+        for key, val in data_dict.items():
+            written_data = f.create_dataset(key, data=val)
+        for kwarg in param_dict.keys():
+            f.attrs[kwarg] = param_dict[kwarg]
 
 
 def extract_info_from_h5(filepath):
