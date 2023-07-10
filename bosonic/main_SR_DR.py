@@ -3,14 +3,14 @@ from functools import partial
 import numpy as np
 from qutip import tensor, destroy, Qobj, to_super, qeye
 
-from fidelity import Fidelity
-from quantum_helpers import (
+from simulate_bosonic_ops import SimulateBosonicOperations, SimulateBosonicOperationsDR
+from utils.fidelity import Fidelity
+from utils.quantum_helpers import (
     apply_gate_to_states,
     operator_basis_lidar,
     operators_from_states,
 )
-from simulate_bosonic_ops import SimulateBosonicOperations, SimulateBosonicOperationsDR
-from utils import (
+from utils.utils import (
     id_wrap_ops,
     construct_basis_states_list,
     project_U, write_to_h5,

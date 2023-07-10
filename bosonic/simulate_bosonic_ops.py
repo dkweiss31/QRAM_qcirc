@@ -1,15 +1,15 @@
 from typing import List
 
+import numpy as np
 from qutip import (
     basis,
     Qobj,
     to_super,
 )
-import numpy as np
 
-from dual_rail import DualRailMixin
-from utils import id_wrap_ops, construct_basis_states_list
-from quantum_helpers import prop_or_mesolve_factory, SWAP_op
+from utils.dual_rail import DualRailMixin
+from utils.quantum_helpers import prop_or_mesolve_factory, SWAP_op
+from utils.utils import id_wrap_ops, construct_basis_states_list
 
 
 class SimulateBosonicOperations:

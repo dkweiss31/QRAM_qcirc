@@ -1,9 +1,9 @@
+import numpy as np
 from qutip import (
     Qobj,
     operator_to_vector,
     vector_to_operator,
 )
-import numpy as np
 
 from quantum_helpers import operator_basis_lidar
 from utils import project_U

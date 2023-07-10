@@ -9,8 +9,8 @@ from qutip import (
 )
 from scipy.special import erf
 
-from dual_rail import DualRailGUEMixin
-from utils import id_wrap_ops
+from utils.dual_rail import DualRailGUEMixin
+from utils.utils import id_wrap_ops
 
 
 class SimulateGUEOneWay:

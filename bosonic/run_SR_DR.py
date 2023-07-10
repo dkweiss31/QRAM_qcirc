@@ -1,6 +1,7 @@
 import numpy as np
+
 from main_SR_DR import main
-from utils import generate_file_path
+from utils.utils import generate_file_path
 
 directory = "out"
 filepath = generate_file_path("h5py", "entangle_fidel_SR_DR", directory)

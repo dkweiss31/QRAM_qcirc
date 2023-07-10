@@ -2,16 +2,16 @@ from functools import partial
 
 from qutip import tensor, basis
 
-from quantum_helpers import (
+from simulate_GUE import SimulateGUEOneWay, SimulateGUEOneWayDR
+from utils.quantum_helpers import (
     operator_basis_lidar,
     apply_gate_to_states,
     operators_from_states,
 )
-from simulate_GUE import SimulateGUEOneWay, SimulateGUEOneWayDR
-from utils import construct_basis_states_list, write_to_h5
+from utils.utils import construct_basis_states_list, write_to_h5
 
 
-def main_one_way(filepath, param_dict):
+def main_GUE(filepath, param_dict):
     gamma_b_avg = param_dict["gamma_b_avg"]
     gamma_c_avg = param_dict["gamma_c_avg"]
     gamma_b_dev = param_dict["gamma_b_dev"]

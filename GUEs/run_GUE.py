@@ -1,7 +1,7 @@
 import numpy as np
 
-from main_GUE import main_one_way
-from utils import generate_file_path
+from GUEs.main_GUE import main_GUE
+from utils.utils import generate_file_path
 
 directory = "out"
 filepath = generate_file_path("hdf5", "GUE_state_transfer_one_way", directory)
@@ -25,4 +25,4 @@ param_dict = {
     "Gamma_phi_transfer": 1.0 / (100 * 10**3),
     "nth": 0.01,
 }
-main_one_way(filepath, param_dict)
+main_GUE(filepath, param_dict)
