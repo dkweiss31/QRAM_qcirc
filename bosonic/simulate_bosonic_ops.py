@@ -4,7 +4,8 @@ import numpy as np
 from qutip import (
     basis,
     Qobj,
-    to_super, Options,
+    to_super,
+    Options,
 )
 
 from utils.dual_rail import DualRailMixin
@@ -28,7 +29,9 @@ class SimulateBosonicOperations:
         options for mesolve
     """
 
-    def __init__(self, gf_tmon=True, tmon_dim=3, cavity_dim=3, nsteps=2000, atol=1e-8, rtol=1e-6):
+    def __init__(
+        self, gf_tmon=True, tmon_dim=3, cavity_dim=3, nsteps=2000, atol=1e-8, rtol=1e-6
+    ):
         self.gf_tmon = gf_tmon
         self.tmon_dim = tmon_dim
         self.cavity_dim = cavity_dim
@@ -151,7 +154,9 @@ class SimulateBosonicOperations:
             a_op.dag() * b_op + a_op * b_op.dag()
         )
         Omega = np.sqrt(g**2 + (chi / 2) ** 2)
-        options = Options(store_final_state=True, atol=self.atol, rtol=self.rtol, nsteps=self.nsteps)
+        options = Options(
+            store_final_state=True, atol=self.atol, rtol=self.rtol, nsteps=self.nsteps
+        )
         return prop_or_mesolve_factory(
             H, 2.0 * np.pi / Omega, c_ops, state, options=options
         )
@@ -226,20 +231,26 @@ class SimulateBosonicOperations:
             s_op = self.sz
         else:
             raise RuntimeError("specified direction must be 'X', 'Y', or 'Z'")
-        options = Options(store_final_state=True, atol=self.atol, rtol=self.rtol, nsteps=self.nsteps)
+        options = Options(
+            store_final_state=True, atol=self.atol, rtol=self.rtol, nsteps=self.nsteps
+        )
         return prop_or_mesolve_factory(0.5 * g * s_op, t, c_ops, state, options=options)
 
     def beamsplitter(
         self, a_op: Qobj, b_op: Qobj, g: float, t: float, c_ops=None, state: Qobj = None
     ):
         H = 0.5 * g * a_op.dag() * b_op + 0.5 * np.conjugate(g) * b_op.dag() * a_op
-        options = Options(store_final_state=True, atol=self.atol, rtol=self.rtol, nsteps=self.nsteps)
+        options = Options(
+            store_final_state=True, atol=self.atol, rtol=self.rtol, nsteps=self.nsteps
+        )
         return prop_or_mesolve_factory(H, t, c_ops, state, options=options)
 
     def cZU(self, a_op: Qobj, chi: float, c_ops=None, state: Qobj = None):
         H = 0.5 * chi * self.sz * a_op.dag() * a_op
         t = np.pi / chi
-        options = Options(store_final_state=True, atol=self.atol, rtol=self.rtol, nsteps=self.nsteps)
+        options = Options(
+            store_final_state=True, atol=self.atol, rtol=self.rtol, nsteps=self.nsteps
+        )
         return prop_or_mesolve_factory(H, t, c_ops, state, options=options)
 
     def cZZZU(
@@ -341,7 +352,9 @@ class SimulateBosonicOperations:
 
 
 class SimulateBosonicOperationsDR(SimulateBosonicOperations, DualRailMixin):
-    def __init__(self, gf_tmon=True, tmon_dim=3, cavity_dim=3, nsteps=2000, atol=1e-8, rtol=1e-6):
+    def __init__(
+        self, gf_tmon=True, tmon_dim=3, cavity_dim=3, nsteps=2000, atol=1e-8, rtol=1e-6
+    ):
         super().__init__(
             gf_tmon=gf_tmon,
             tmon_dim=tmon_dim,

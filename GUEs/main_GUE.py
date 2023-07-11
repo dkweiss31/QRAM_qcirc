@@ -65,8 +65,11 @@ def main_GUE(filepath, param_dict):
     psi_init = (state_1000 + 1j * state_0100).unit()
     psi_fin = (state_0010 + 1j * state_0001).unit()
     c_ops = guefidelity_label.construct_c_ops(
-        Gamma_1_cav=Gamma_1_cav, Gamma_1_transfer_nr=Gamma_1_transfer_nr,
-        Gamma_phi_cav=Gamma_phi_cav, Gamma_phi_transfer=Gamma_phi_transfer, nth=nth,
+        Gamma_1_cav=Gamma_1_cav,
+        Gamma_1_transfer_nr=Gamma_1_transfer_nr,
+        Gamma_phi_cav=Gamma_phi_cav,
+        Gamma_phi_transfer=Gamma_phi_transfer,
+        nth=nth,
     )
     pulse_args = {
         "c": c,

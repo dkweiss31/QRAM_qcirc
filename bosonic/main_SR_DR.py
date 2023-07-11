@@ -13,7 +13,8 @@ from utils.quantum_helpers import (
 from utils.utils import (
     id_wrap_ops,
     construct_basis_states_list,
-    project_U, write_to_h5,
+    project_U,
+    write_to_h5,
 )
 
 
@@ -39,10 +40,20 @@ def main(filepath, param_dict):
     a = id_wrap_ops(destroy(cavity_dim), cav_a_idx, truncated_dims_SR)
     b = id_wrap_ops(destroy(cavity_dim), cav_b_idx, truncated_dims_SR)
     bosonic_sim_SR = SimulateBosonicOperations(
-        gf_tmon=True, tmon_dim=tmon_dim, cavity_dim=cavity_dim, atol=atol, rtol=rtol, nsteps=nsteps
+        gf_tmon=True,
+        tmon_dim=tmon_dim,
+        cavity_dim=cavity_dim,
+        atol=atol,
+        rtol=rtol,
+        nsteps=nsteps,
     )
     bosonic_sim_DR = SimulateBosonicOperationsDR(
-        gf_tmon=True, tmon_dim=tmon_dim, cavity_dim=cavity_dim, atol=atol, rtol=rtol, nsteps=nsteps
+        gf_tmon=True,
+        tmon_dim=tmon_dim,
+        cavity_dim=cavity_dim,
+        atol=atol,
+        rtol=rtol,
+        nsteps=nsteps,
     )
     # computational basis states include only Fock 0, 1 and transmon 0
     g_Fock_states_spec_SR = [(i, j, 0) for i in range(2) for j in range(2)]
@@ -119,7 +130,12 @@ def main(filepath, param_dict):
     print(f"postselected process fidelity single rail:  {process_fidel_SR}")
     print(f"entanglement fidelity, success prob dual rail: {e_fidel_DR, prob_DR}")
     print(f"postselected process fidelity dual rail:  {process_fidel_DR}")
-    data_dict = {"e_fidel_SR": e_fidel_SR, "e_fidel_DR": e_fidel_DR,
-                 "prob_SR": prob_SR, "prob_DR": prob_DR,
-                 "process_fidel_SR": process_fidel_SR, "process_fidel_DR": process_fidel_DR}
+    data_dict = {
+        "e_fidel_SR": e_fidel_SR,
+        "e_fidel_DR": e_fidel_DR,
+        "prob_SR": prob_SR,
+        "prob_DR": prob_DR,
+        "process_fidel_SR": process_fidel_SR,
+        "process_fidel_DR": process_fidel_DR,
+    }
     write_to_h5(filepath, data_dict, param_dict)

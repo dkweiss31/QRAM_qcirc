@@ -5,7 +5,8 @@ from qutip import (
     Options,
     tensor,
     qeye,
-    basis, Qobj,
+    basis,
+    Qobj,
 )
 from scipy.special import erf
 
@@ -109,8 +110,14 @@ class SimulateGUEOneWay:
         )
         return L_R_b, L_R_c, L_L_b, L_L_c
 
-    def construct_c_ops(self, Gamma_1_cav=0.0, Gamma_1_transfer_nr=0.0,
-                        Gamma_phi_cav=0.0, Gamma_phi_transfer=0.0, nth=0.0):
+    def construct_c_ops(
+        self,
+        Gamma_1_cav=0.0,
+        Gamma_1_transfer_nr=0.0,
+        Gamma_phi_cav=0.0,
+        Gamma_phi_transfer=0.0,
+        nth=0.0,
+    ):
         L_R_b, L_R_c, L_L_b, L_L_c = self.collective_loss_ops()
         return [
             L_R_b + L_R_c,
@@ -209,18 +216,23 @@ class SimulateGUEOneWay:
         ).final_state
 
     @staticmethod
-    def state_transfer_fidelity(real_final_states: dict, ideal_final_cardinal_states: dict, measurement_op: Qobj =
-    None):
+    def state_transfer_fidelity(
+        real_final_states: dict,
+        ideal_final_cardinal_states: dict,
+        measurement_op: Qobj = None,
+    ):
         fidel = 0.0
         total_prob = 0.0
         num_states = len(ideal_final_cardinal_states)
         for (real_final_state, ideal_final_state) in zip(
-                real_final_states.values(), ideal_final_cardinal_states.values()
+            real_final_states.values(), ideal_final_cardinal_states.values()
         ):
             norm = np.trace(real_final_state)
             real_final_state = real_final_state / norm
             if measurement_op is not None:
-                real_final_state = measurement_op * real_final_state * measurement_op.dag()
+                real_final_state = (
+                    measurement_op * real_final_state * measurement_op.dag()
+                )
                 prob = np.trace(real_final_state)
                 real_final_state = real_final_state / prob
                 total_prob += prob
@@ -252,8 +264,8 @@ class SimulateGUEOneWayDR(SimulateGUEOneWay, DualRailGUEMixin):
         dim_0 = self.truncated_dims[idx_0]
         dim_1 = self.truncated_dims[idx_1]
         right_state = (
-                tensor(basis(dim_0, 1), basis(dim_1, 0))
-                + 1j * tensor(basis(dim_0, 0), basis(dim_1, 1))
+            tensor(basis(dim_0, 1), basis(dim_1, 0))
+            + 1j * tensor(basis(dim_0, 0), basis(dim_1, 1))
         ).unit()
         return right_state
 
@@ -271,5 +283,9 @@ class SimulateGUEOneWayDR(SimulateGUEOneWay, DualRailGUEMixin):
             id_op = tensor(qeye([dim_0, dim_1]), qeye(2))
         else:
             id_op = qeye([dim_0, dim_1])
-        return (tensor(right_state_proj, id_op) + tensor(id_op, right_state_proj)
-                + tensor(left_state_proj, id_op) + tensor(id_op, left_state_proj))
+        return (
+            tensor(right_state_proj, id_op)
+            + tensor(id_op, right_state_proj)
+            + tensor(left_state_proj, id_op)
+            + tensor(id_op, left_state_proj)
+        )

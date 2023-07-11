@@ -125,7 +125,9 @@ class RamseyExperiment:
             c_ops = self.construct_c_ops_interference()
         else:
             c_ops = self.construct_c_ops_no_interference()
-        options = Options(store_final_state=True, nsteps=self.nsteps, atol=self.atol, rtol=self.rtol)
+        options = Options(
+            store_final_state=True, nsteps=self.nsteps, atol=self.atol, rtol=self.rtol
+        )
         result_thermal = mesolve(
             H0,
             initial_state * initial_state.dag(),
@@ -158,7 +160,9 @@ class RamseyExperiment:
     def pi_2_pulse(self, H, init_dm, c_ops, tmon_drive_amp: float = 2.0 * np.pi * 0.01):
         t_pi2 = np.pi / (2 * tmon_drive_amp)
         (sx, sy, sz) = self.tmon_Pauli_ops()
-        options = Options(store_final_state=True, nsteps=self.nsteps, atol=self.atol, rtol=self.rtol)
+        options = Options(
+            store_final_state=True, nsteps=self.nsteps, atol=self.atol, rtol=self.rtol
+        )
         return mesolve(
             H + 0.5 * tmon_drive_amp * sx,
             init_dm,
@@ -187,13 +191,16 @@ class RamseyExperiment:
         readout_proj = self.readout_proj()
         final_prob = np.zeros_like(delay_times)
         state_after_prev_delay = self.pi_2_pulse(H, thermal_state, c_ops).final_state
-        final_state = self.pi_2_pulse(
-                    H, state_after_prev_delay, c_ops
-                ).final_state
+        final_state = self.pi_2_pulse(H, state_after_prev_delay, c_ops).final_state
         final_prob[0] = np.real(np.trace(final_state * readout_proj))
         delay_dif = delay_times[1] - delay_times[0]
         for idx in range(1, len(delay_times)):
-            options = Options(store_final_state=True, nsteps=self.nsteps, atol=self.atol, rtol=self.rtol)
+            options = Options(
+                store_final_state=True,
+                nsteps=self.nsteps,
+                atol=self.atol,
+                rtol=self.rtol,
+            )
             state_after_delay = mesolve(
                 H,
                 state_after_prev_delay,
@@ -227,8 +234,8 @@ class RamseyExperiment:
             window = (0, len(delay_times))
         popt_T2, pcov_T2 = curve_fit(
             self.T2_func,
-            delay_times[window[0]: window[1]],
-            ramsey_result[window[0]: window[1]],
+            delay_times[window[0] : window[1]],
+            ramsey_result[window[0] : window[1]],
             p0=p0,
             maxfev=6000,
             bounds=((100, -2, -2, -2, -np.pi), (10**15, 2, 2, 2, np.pi)),
