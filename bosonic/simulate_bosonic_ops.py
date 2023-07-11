@@ -4,7 +4,7 @@ import numpy as np
 from qutip import (
     basis,
     Qobj,
-    to_super,
+    to_super, Options,
 )
 
 from utils.dual_rail import DualRailMixin
@@ -24,17 +24,18 @@ class SimulateBosonicOperations:
         transmon Hilbert space dimension
     cavity_dim: int
         cavity Hilbert space dimensions
-    control_dt: float
-        if using the state tracking method (mesolve vs. exponentiating) the dt of the tlist
-        past to mesolve
+    nsteps, atol, rtol: int, float, float
+        options for mesolve
     """
 
-    def __init__(self, gf_tmon=True, tmon_dim=3, cavity_dim=3, control_dt=1.0):
+    def __init__(self, gf_tmon=True, tmon_dim=3, cavity_dim=3, nsteps=2000, atol=1e-8, rtol=1e-6):
         self.gf_tmon = gf_tmon
         self.tmon_dim = tmon_dim
         self.cavity_dim = cavity_dim
         self.truncated_dims = [cavity_dim, cavity_dim, tmon_dim]
-        self.control_dt = control_dt
+        self.nsteps = nsteps
+        self.atol = atol
+        self.rtol = rtol
         # below we define the s_ops for the transmon
         self.sx = None
         self.sy = None
@@ -150,8 +151,9 @@ class SimulateBosonicOperations:
             a_op.dag() * b_op + a_op * b_op.dag()
         )
         Omega = np.sqrt(g**2 + (chi / 2) ** 2)
+        options = Options(store_final_state=True, atol=self.atol, rtol=self.rtol, nsteps=self.nsteps)
         return prop_or_mesolve_factory(
-            H, 2.0 * np.pi / Omega, self.control_dt, c_ops, state
+            H, 2.0 * np.pi / Omega, c_ops, state, options=options
         )
 
     @staticmethod
@@ -224,18 +226,21 @@ class SimulateBosonicOperations:
             s_op = self.sz
         else:
             raise RuntimeError("specified direction must be 'X', 'Y', or 'Z'")
-        return prop_or_mesolve_factory(0.5 * g * s_op, t, self.control_dt, c_ops, state)
+        options = Options(store_final_state=True, atol=self.atol, rtol=self.rtol, nsteps=self.nsteps)
+        return prop_or_mesolve_factory(0.5 * g * s_op, t, c_ops, state, options=options)
 
     def beamsplitter(
         self, a_op: Qobj, b_op: Qobj, g: float, t: float, c_ops=None, state: Qobj = None
     ):
         H = 0.5 * g * a_op.dag() * b_op + 0.5 * np.conjugate(g) * b_op.dag() * a_op
-        return prop_or_mesolve_factory(H, t, self.control_dt, c_ops, state)
+        options = Options(store_final_state=True, atol=self.atol, rtol=self.rtol, nsteps=self.nsteps)
+        return prop_or_mesolve_factory(H, t, c_ops, state, options=options)
 
     def cZU(self, a_op: Qobj, chi: float, c_ops=None, state: Qobj = None):
         H = 0.5 * chi * self.sz * a_op.dag() * a_op
         t = np.pi / chi
-        return prop_or_mesolve_factory(H, t, self.control_dt, c_ops, state)
+        options = Options(store_final_state=True, atol=self.atol, rtol=self.rtol, nsteps=self.nsteps)
+        return prop_or_mesolve_factory(H, t, c_ops, state, options=options)
 
     def cZZZU(
         self,
@@ -336,12 +341,14 @@ class SimulateBosonicOperations:
 
 
 class SimulateBosonicOperationsDR(SimulateBosonicOperations, DualRailMixin):
-    def __init__(self, gf_tmon=True, tmon_dim=3, cavity_dim=3, control_dt=1.0):
+    def __init__(self, gf_tmon=True, tmon_dim=3, cavity_dim=3, nsteps=2000, atol=1e-8, rtol=1e-6):
         super().__init__(
             gf_tmon=gf_tmon,
             tmon_dim=tmon_dim,
             cavity_dim=cavity_dim,
-            control_dt=control_dt,
+            nsteps=nsteps,
+            atol=atol,
+            rtol=rtol,
         )
 
     def measurement_op_DR_parity(self):
@@ -354,7 +361,7 @@ class SimulateBosonicOperationsDR(SimulateBosonicOperations, DualRailMixin):
             Fock_states = construct_basis_states_list(
                 Fock_states_spec, self.truncated_dims
             )
-            Fock_states_DR, _ = self.DR_basis(Fock_states)
+            Fock_states_DR = self.DR_basis(Fock_states)
             measurement_op += sum(
                 [
                     detected_state * detected_state.dag()

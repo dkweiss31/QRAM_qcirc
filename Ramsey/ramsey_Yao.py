@@ -9,7 +9,6 @@ from qutip import (
     Options,
     operator_to_vector,
     vector_to_operator,
-    liouvillian,
     qeye,
     tensor,
     basis,
@@ -32,6 +31,8 @@ class RamseyExperiment:
         cavity_dim,
         num_cavs,
         nsteps=1000,
+        atol=1e-8,
+        rtol=1e-6,
     ):
         assert len(omega_cavs) == len(chi_cavstmon) == len(kappa_cavs) == num_cavs
         self.omega_tmon = omega_tmon
@@ -43,6 +44,8 @@ class RamseyExperiment:
         self.cavity_dim = cavity_dim
         self.num_cavs = num_cavs
         self.nsteps = nsteps
+        self.atol = atol
+        self.rtol = rtol
         self.truncated_dims = num_cavs * [cavity_dim] + [tmon_dim]
 
     def tmon_Pauli_ops(self):
@@ -122,12 +125,13 @@ class RamseyExperiment:
             c_ops = self.construct_c_ops_interference()
         else:
             c_ops = self.construct_c_ops_no_interference()
+        options = Options(store_final_state=True, nsteps=self.nsteps, atol=self.atol, rtol=self.rtol)
         result_thermal = mesolve(
             H0,
             initial_state * initial_state.dag(),
             (0, total_time),
             c_ops,
-            options=Options(store_final_state=True, nsteps=self.nsteps),
+            options=options,
         )
         return result_thermal.final_state
 
@@ -154,12 +158,13 @@ class RamseyExperiment:
     def pi_2_pulse(self, H, init_dm, c_ops, tmon_drive_amp: float = 2.0 * np.pi * 0.01):
         t_pi2 = np.pi / (2 * tmon_drive_amp)
         (sx, sy, sz) = self.tmon_Pauli_ops()
+        options = Options(store_final_state=True, nsteps=self.nsteps, atol=self.atol, rtol=self.rtol)
         return mesolve(
             H + 0.5 * tmon_drive_amp * sx,
             init_dm,
             (0, t_pi2),
             c_ops=c_ops,
-            options=Options(store_final_state=True, nsteps=self.nsteps),
+            options=options,
         )
 
     def ramsey_one_shot(self, H, thermal_state, liouv_delay, c_ops):
@@ -175,62 +180,37 @@ class RamseyExperiment:
         ]
         return tensor(*op_list)
 
-    def liouv_idle(self, H, c_ops, idle_time):
-        if idle_time == 0.0:
-            return qeye(H.dims)
-        else:
-            return (liouvillian(H, c_ops) * idle_time).expm()
-
-    def ramsey_liouv(self, thermal_state, delay_times, omega_d, c_ops):
-        ramsey_results = np.zeros_like(delay_times)
-        delay_dif = delay_times[1] - delay_times[0]  # assume equally spaced array
-        (sx, sy, sz) = self.tmon_Pauli_ops()
-        H0_q = -0.5 * (self.omega_tmon - omega_d) * sz
-        H = self.hamiltonian() + H0_q
-        liouv_delay = self.liouv_idle(H, c_ops, delay_dif)
-        init_liouv_delay = self.liouv_idle(H, c_ops, delay_times[0])
-        for i, delay_time in enumerate(delay_times):
-            if i == 0:
-                next_liouv_delay = init_liouv_delay
-            else:
-                next_liouv_delay = liouv_delay * prev_liouv_delay
-            ramsey_results[i] = np.real(
-                self.ramsey_one_shot(H, thermal_state, next_liouv_delay, c_ops)
-            )
-            prev_liouv_delay = next_liouv_delay
-        return ramsey_results
-
     def ramsey_indep(self, thermal_state, delay_times, omega_d, c_ops):
         (sx, sy, sz) = self.tmon_Pauli_ops()
         H0_q = -0.5 * (self.omega_tmon - omega_d) * sz
         H = self.hamiltonian() + H0_q
-        first_pi_2 = self.pi_2_pulse(H, thermal_state, c_ops)
+        readout_proj = self.readout_proj()
         final_prob = np.zeros_like(delay_times)
-        delay_dif = delay_times[1] - delay_times[0]
-        for idx, delay_time in enumerate(delay_times):
-            if idx == 0:
-                state_after_prev_delay = first_pi_2.final_state
-                final_state = self.pi_2_pulse(
+        state_after_prev_delay = self.pi_2_pulse(H, thermal_state, c_ops).final_state
+        final_state = self.pi_2_pulse(
                     H, state_after_prev_delay, c_ops
                 ).final_state
-            else:
-                state_after_delay = mesolve(
-                    H,
-                    state_after_prev_delay,
-                    (0, delay_dif),
-                    c_ops=c_ops,
-                    options=Options(store_final_state=True, nsteps=self.nsteps),
-                ).final_state
-                final_state = self.pi_2_pulse(H, state_after_delay, c_ops).final_state
-                state_after_prev_delay = state_after_delay
+        final_prob[0] = np.real(np.trace(final_state * readout_proj))
+        delay_dif = delay_times[1] - delay_times[0]
+        for idx in range(1, len(delay_times)):
+            options = Options(store_final_state=True, nsteps=self.nsteps, atol=self.atol, rtol=self.rtol)
+            state_after_delay = mesolve(
+                H,
+                state_after_prev_delay,
+                (0, delay_dif),
+                c_ops=c_ops,
+                options=options,
+            ).final_state
+            final_state = self.pi_2_pulse(H, state_after_delay, c_ops).final_state
+            state_after_prev_delay = state_after_delay
             final_prob[idx] = np.real(np.trace(final_state * self.readout_proj()))
         return final_prob
 
     def plot_ramsey(self, ramsey_result, delay_times, popt_T2, filename=None):
         fig, ax = plt.subplots(figsize=(8, 4))
-        plt.plot(delay_times, ramsey_result, "o")
+        ax.plot(delay_times, ramsey_result, "o")
         plot_times = np.linspace(0.0, delay_times[-1], 2000)
-        plt.plot(plot_times, self.T2_func(plot_times, *popt_T2), linestyle="-")
+        ax.plot(plot_times, self.T2_func(plot_times, *popt_T2), linestyle="-")
         if filename is not None:
             plt.savefig(filename)
         plt.show()
@@ -247,8 +227,8 @@ class RamseyExperiment:
             window = (0, len(delay_times))
         popt_T2, pcov_T2 = curve_fit(
             self.T2_func,
-            delay_times[window[0] : window[1]],
-            ramsey_result[window[0] : window[1]],
+            delay_times[window[0]: window[1]],
+            ramsey_result[window[0]: window[1]],
             p0=p0,
             maxfev=6000,
             bounds=((100, -2, -2, -2, -np.pi), (10**15, 2, 2, 2, np.pi)),

@@ -8,8 +8,10 @@ def main_ramsey_two(filepath, param_dict):
     interference = param_dict["interference"]
     cavity_dim = param_dict["cavity_dim"]
     nsteps = param_dict["nsteps"]
+    atol = param_dict["atol"]
+    rtol = param_dict["rtol"]
     tmon_dim = 2
-    delay_times = np.linspace(0.0, 8000.0, 3001)
+    delay_times = np.linspace(0.0, 2000.0, 301)
     window = (0, 300)
     omega_a = 2.0 * np.pi * 3.3261  # 3.40 #3.326
     omega_b = 2.0 * np.pi * 3.4712
@@ -33,6 +35,8 @@ def main_ramsey_two(filepath, param_dict):
         cavity_dim,
         2,
         nsteps=nsteps,
+        atol=atol,
+        rtol=rtol,
     )
     thermal_state = ramsey_experiment_two.obtain_thermal_state()
     if interference:
@@ -62,5 +66,4 @@ def main_ramsey_two(filepath, param_dict):
         f"Ramsey experiment with interference = {interference}, cav_dim = {cavity_dim}, 2 cavities"
     )
     print(f"naive gamma_phi = {naive_gamma_phi}")
-    # print(f"liouv gamma_phi = {gamma_phi_liouv}")
     print(f"indep gamma_phi = {gamma_phi_indep}")

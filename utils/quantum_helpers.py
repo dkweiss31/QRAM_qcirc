@@ -1,7 +1,6 @@
 from itertools import product
 from typing import List, Callable, Optional, Union
 
-import numpy as np
 from qutip import (
     Qobj,
     liouvillian,
@@ -11,7 +10,7 @@ from qutip import (
     tensor,
 )
 
-from utils import get_map, construct_basis_states_list
+from utils.utils import get_map, construct_basis_states_list
 
 
 def _propagator(H: Qobj, t: float, c_ops: Optional[List[Qobj]] = None) -> Qobj:
@@ -192,7 +191,7 @@ def Fock_prods(dim: Union[int, list[int]]) -> Union[list, range]:
 
 
 def prop_or_mesolve_factory(
-    H: Qobj, t: float, dt: float, c_ops: Optional[list[Qobj]], state: Optional[Qobj]
+    H: Qobj, t: float, c_ops: Optional[list[Qobj]], state: Optional[Qobj], options: Optional[Options]
 ) -> Qobj:
     """
     Parameters
@@ -201,12 +200,12 @@ def prop_or_mesolve_factory(
         Hamiltonian
     t: float
         time for which the Hamiltonian acts
-    dt: float
-        dt for mesolve
     c_ops: list[Qobj]
         collapse operators
     state: Qobj
         state to time evolve. if None, return the propogator
+    options: Options
+        options for mesolve
     Returns
     -------
         Qobj of propogator or final state
@@ -214,8 +213,7 @@ def prop_or_mesolve_factory(
     if state is None:
         return _propagator(H, t, c_ops=c_ops)
     else:
-        tlist = np.linspace(0.0, t, int(t / dt))
         result = mesolve(
-            H, state, tlist, c_ops=c_ops, options=Options(store_final_state=True)
+            H, state, (0, t), c_ops=c_ops, options=options
         )
         return result.final_state

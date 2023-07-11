@@ -9,11 +9,8 @@ from qutip import (
     vector_to_operator,
     tensor,
     to_super,
-    mesolve,
-    Options,
 )
 
-from Ramsey.ramsey_Yao import RamseyExperiment
 from bosonic.simulate_bosonic_ops import SimulateBosonicOperations, SimulateBosonicOperationsDR
 from utils.quantum_helpers import (
     apply_gate_to_states,
@@ -190,54 +187,3 @@ class TestSimulateBosonicOps:
                 np.max(np.abs(final_state_prop.data - final_DR_states[label].data))
                 < 1e-4
             )
-
-
-class TestRamsey:
-    @classmethod
-    def setup_class(cls):
-        cls.interference = True
-        cavity_dim = 4
-        nsteps = 1000
-        tmon_dim = 2
-        omega_a = 2.0 * np.pi * 3.3261  # 3.40 #3.326
-        omega_b = 2.0 * np.pi * 3.4712
-        omega_array = np.array([omega_a, omega_b])
-        omega_tmon = 2.0 * np.pi * 5.7423  # 5.867
-        cls.omega_d = omega_tmon - 2.0 * np.pi * 0.0071
-        chiaq = -2.0 * np.pi * 0.000322
-        chibq = -2.0 * np.pi * 0.000571
-        chi_array = np.array([chiaq, chibq])
-        kappa_a = 2.0 * np.pi * 0.04268
-        kappa_b = 2.0 * np.pi * 0.04784
-        kappa_array = np.array([kappa_a, kappa_b])
-        temp = 0.1
-        control_dt = param_dict["control_dt"]
-        cls.ram = RamseyExperiment(
-            omega_tmon,
-            omega_array,
-            chi_array,
-            kappa_array,
-            temp,
-            tmon_dim,
-            cavity_dim,
-            2,
-            control_dt=control_dt,
-            nsteps=nsteps,
-        )
-
-    def test_compare_liouv_indep(self):
-        H = self.ram.hamiltonian()
-        thermal_state = self.ram.obtain_thermal_state()
-        if self.interference:
-            c_ops = self.ram.construct_c_ops_interference()
-        else:
-            c_ops = self.ram.construct_c_ops_no_interference()
-        # test delay
-        state_after_delay_0 = mesolve(
-            H,
-            thermal_state,
-            (0, 10),
-            c_ops=c_ops,
-            options=Options(store_final_state=True, nsteps=self.ram.nsteps),
-        ).final_state
-        state_after_delay_1 = self.ram.liouv_idle(10, c_ops)

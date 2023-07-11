@@ -20,7 +20,6 @@ from utils.utils import (
 def main(filepath, param_dict):
     tmon_dim = param_dict["tmon_dim"]
     cavity_dim = param_dict["cavity_dim"]
-    control_dt = param_dict["control_dt"]
     chi = param_dict["chi"]
     tmon_d_strength = param_dict["tmon_d_strength"]
     params = (tmon_d_strength, chi)
@@ -30,6 +29,9 @@ def main(filepath, param_dict):
     postselection = param_dict["postselection"]
     liouv = param_dict["liouvillian"]
     num_cpus = param_dict["num_cpus"]
+    atol = param_dict["atol"]
+    rtol = param_dict["rtol"]
+    nsteps = param_dict["nsteps"]
     cav_a_idx = 0
     cav_b_idx = 1
     tmon_idx = 2
@@ -37,10 +39,10 @@ def main(filepath, param_dict):
     a = id_wrap_ops(destroy(cavity_dim), cav_a_idx, truncated_dims_SR)
     b = id_wrap_ops(destroy(cavity_dim), cav_b_idx, truncated_dims_SR)
     bosonic_sim_SR = SimulateBosonicOperations(
-        gf_tmon=True, tmon_dim=tmon_dim, cavity_dim=cavity_dim, control_dt=control_dt
+        gf_tmon=True, tmon_dim=tmon_dim, cavity_dim=cavity_dim, atol=atol, rtol=rtol, nsteps=nsteps
     )
     bosonic_sim_DR = SimulateBosonicOperationsDR(
-        gf_tmon=True, tmon_dim=tmon_dim, cavity_dim=cavity_dim, control_dt=control_dt
+        gf_tmon=True, tmon_dim=tmon_dim, cavity_dim=cavity_dim, atol=atol, rtol=rtol, nsteps=nsteps
     )
     # computational basis states include only Fock 0, 1 and transmon 0
     g_Fock_states_spec_SR = [(i, j, 0) for i in range(2) for j in range(2)]
@@ -111,11 +113,13 @@ def main(filepath, param_dict):
         projected_ideal_DR,
         measurement_op=measurement_op_DR,
     )
-    print(f"saving run to {filepath}")
-    print(f"entanglement fidelity single rail: {e_fidel_SR}")
-    print(f"success probability single rail: {prob_SR}")
-    print(f"entanglement fidelity dual rail: {e_fidel_DR}")
-    print(f"success probability dual rail: {prob_DR}")
+    process_fidel_SR = fidelity_SR.process_fidelity_nielsen(e_fidel_SR / prob_SR)
+    process_fidel_DR = fidelity_DR.process_fidelity_nielsen(e_fidel_DR / prob_DR)
+    print(f"entanglement fidelity, success prob single rail: {e_fidel_SR, prob_SR}")
+    print(f"postselected process fidelity single rail:  {process_fidel_SR}")
+    print(f"entanglement fidelity, success prob dual rail: {e_fidel_DR, prob_DR}")
+    print(f"postselected process fidelity dual rail:  {process_fidel_DR}")
     data_dict = {"e_fidel_SR": e_fidel_SR, "e_fidel_DR": e_fidel_DR,
-                 "prob_SR": prob_SR, "prob_DR": prob_DR}
+                 "prob_SR": prob_SR, "prob_DR": prob_DR,
+                 "process_fidel_SR": process_fidel_SR, "process_fidel_DR": process_fidel_DR}
     write_to_h5(filepath, data_dict, param_dict)
