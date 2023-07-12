@@ -16,6 +16,7 @@ def main_GUE(filepath, param_dict):
     gamma_c_avg = param_dict["gamma_c_avg"]
     gamma_b_dev = param_dict["gamma_b_dev"]
     gamma_c_dev = param_dict["gamma_c_dev"]
+    cavity_dim = param_dict["cavity_dim"]
     scale_b = param_dict["scale_b"]
     scale_c = param_dict["scale_c"]
     t_half = param_dict["t_half"]
@@ -27,7 +28,9 @@ def main_GUE(filepath, param_dict):
     Gamma_phi_cav = param_dict["Gamma_phi_cav"]
     Gamma_phi_transfer = param_dict["Gamma_phi_transfer"]
     nth = param_dict["nth"]
-    cavity_dim = 2
+    nsteps = param_dict["nsteps"]
+    atol = param_dict["atol"]
+    rtol = param_dict["rtol"]
     guefidelity_label = SimulateGUEOneWay(
         gamma_b_avg=gamma_b_avg,
         gamma_b_dev=gamma_b_dev,
@@ -35,6 +38,9 @@ def main_GUE(filepath, param_dict):
         gamma_c_dev=gamma_c_dev,
         cavity_dim=cavity_dim,
         additional_label=True,  # make more general plz
+        nsteps=nsteps,
+        atol=atol,
+        rtol=rtol,
     )
     guefidelity_label_DR = SimulateGUEOneWayDR(
         gamma_b_avg=gamma_b_avg,
@@ -43,6 +49,9 @@ def main_GUE(filepath, param_dict):
         gamma_c_dev=gamma_c_dev,
         cavity_dim=cavity_dim,
         additional_label=True,
+        nsteps=nsteps,
+        atol=atol,
+        rtol=rtol,
     )
     c1_idx = guefidelity_label_DR.c1_idx
     c2_idx = guefidelity_label_DR.c2_idx

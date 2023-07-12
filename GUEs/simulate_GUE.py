@@ -25,9 +25,15 @@ class SimulateGUEOneWay:
         gamma_c_dev,
         cavity_dim: int = 2,
         additional_label: bool = False,
+        nsteps: int = 2000,
+        atol: float = 1e-10,
+        rtol: float = 1e-10,
     ):
         self.cavity_dim = cavity_dim
         self.additional_label = additional_label
+        self.nsteps = nsteps
+        self.atol = atol
+        self.rtol = rtol
         self.truncated_dims = 8 * [cavity_dim]
         cav_idx_list = ["b1_idx", "b2_idx", "c1_idx", "c2_idx"]
         tran_idx_list = ["b1_r_idx", "b2_r_idx", "c1_r_idx", "c2_r_idx"]
@@ -148,7 +154,8 @@ class SimulateGUEOneWay:
             np.sqrt(Gamma_phi_transfer) * self.c2_r.dag() * self.c2_r,
         ]
 
-    def gamma_b_func(self, t, args=None):
+    @staticmethod
+    def gamma_b_func(t, args=None):
         c = args["c"]
         B = args["B"]
         gamma_b = args["gamma_b_avg"]
@@ -190,7 +197,7 @@ class SimulateGUEOneWay:
         c_ops=None,
         e_ops=None,
         init_state=None,
-    ):
+    ) -> Qobj:
         if e_ops is None:
             e_ops = []
         if c_ops is None:
@@ -205,6 +212,9 @@ class SimulateGUEOneWay:
             [H_int_c_1, self.gamma_c_func],
             [H_int_c_2, self.gamma_c_func],
         ]
+        options = Options(
+            store_final_state=True, atol=self.atol, rtol=self.rtol, nsteps=self.nsteps
+        )
         return mesolve(
             H,
             init_state,
@@ -212,7 +222,7 @@ class SimulateGUEOneWay:
             c_ops=c_ops,
             args=args,
             e_ops=e_ops,
-            options=Options(store_final_state=True, store_states=True),
+            options=options,
         ).final_state
 
     @staticmethod
@@ -249,6 +259,9 @@ class SimulateGUEOneWayDR(SimulateGUEOneWay, DualRailGUEMixin):
         gamma_c_dev,
         cavity_dim: int = 2,
         additional_label: bool = False,
+        nsteps: int = 2000,
+        atol: float = 1e-10,
+        rtol: float = 1e-10,
     ):
         super().__init__(
             gamma_b_avg,
@@ -257,6 +270,9 @@ class SimulateGUEOneWayDR(SimulateGUEOneWay, DualRailGUEMixin):
             gamma_c_dev,
             cavity_dim=cavity_dim,
             additional_label=additional_label,
+            nsteps=nsteps,
+            atol=atol,
+            rtol=rtol,
         )
 
     def rightward_state(self, idx_0, idx_1):
@@ -270,7 +286,7 @@ class SimulateGUEOneWayDR(SimulateGUEOneWay, DualRailGUEMixin):
         return right_state
 
     def measurement_op_DR(self, idx_0, idx_1):
-        # assume below that we've traced out non interesting d.o.fs
+        # assume below that we've traced out transfer res and initial data cavs
         assert idx_1 == idx_0 + 1
         dim_0 = self.truncated_dims[idx_0]
         dim_1 = self.truncated_dims[idx_1]

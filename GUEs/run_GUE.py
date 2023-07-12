@@ -9,6 +9,7 @@ T1_res = 25000 * 10**3
 T2_res = 34000 * 10**3
 Tphi_res = ((1 / T2_res) - (1 / (2 * T1_res))) ** (-1)
 param_dict = {
+    "cavity_dim": 2,
     "gamma_b_avg": 2.0 * np.pi * 0.02,
     "gamma_c_avg": 2.0 * np.pi * 0.02,
     "gamma_b_dev": 2.0 * np.pi * 0.0,
@@ -24,5 +25,8 @@ param_dict = {
     "Gamma_phi_cav": 1.0 / Tphi_res,
     "Gamma_phi_transfer": 1.0 / (100 * 10**3),
     "nth": 0.01,
+    "nsteps": 2000,
+    "atol": 1e-10,
+    "rtol": 1e-10,
 }
 main_GUE(filepath, param_dict)
