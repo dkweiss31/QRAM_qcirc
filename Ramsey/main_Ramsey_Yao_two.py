@@ -12,7 +12,6 @@ def main_ramsey_two(filepath, param_dict):
     rtol = param_dict["rtol"]
     tmon_dim = 2
     delay_times = np.linspace(0.0, 2000.0, 301)
-    window = (0, 300)
     omega_a = 2.0 * np.pi * 3.3261  # 3.40 #3.326
     omega_b = 2.0 * np.pi * 3.4712
     omega_array = np.array([omega_a, omega_b])

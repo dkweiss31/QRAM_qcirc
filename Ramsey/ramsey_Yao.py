@@ -75,7 +75,7 @@ class RamseyExperiment:
         )
         for idx, a_op in enumerate(annihilation_ops_list):
             H0 += 0.5 * self.chi_cavstmon[idx] * a_op.dag() * a_op * sz
-        return H0
+        return [H0, ]
 
     def construct_c_ops_interference(self):
         collective_lowering = sum(
@@ -163,8 +163,9 @@ class RamseyExperiment:
         options = Options(
             store_final_state=True, nsteps=self.nsteps, atol=self.atol, rtol=self.rtol
         )
+        H[0] += 0.5 * tmon_drive_amp * sx
         return mesolve(
-            H + 0.5 * tmon_drive_amp * sx,
+            H,
             init_dm,
             (0, t_pi2),
             c_ops=c_ops,
@@ -187,7 +188,8 @@ class RamseyExperiment:
     def ramsey_indep(self, thermal_state, delay_times, omega_d, c_ops):
         (sx, sy, sz) = self.tmon_Pauli_ops()
         H0_q = -0.5 * (self.omega_tmon - omega_d) * sz
-        H = self.hamiltonian() + H0_q
+        H = self.hamiltonian()
+        H[0] += H0_q
         readout_proj = self.readout_proj()
         final_prob = np.zeros_like(delay_times)
         state_after_prev_delay = self.pi_2_pulse(H, thermal_state, c_ops).final_state
@@ -243,3 +245,6 @@ class RamseyExperiment:
         if plot:
             self.plot_ramsey(ramsey_result, delay_times, popt_T2)
         return (1 / popt_T2[0]) * 10**6 / (2 * np.pi), popt_T2, pcov_T2
+
+
+# class
