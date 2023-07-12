@@ -2,7 +2,7 @@ from main_Ramsey_Yao_two import main_ramsey_two
 from utils.utils import generate_file_path
 
 directory = "out"
-cavity_dim = 7
+cavity_dim = 4
 nsteps = 3000
 atol = 1e-10
 rtol = 1e-10

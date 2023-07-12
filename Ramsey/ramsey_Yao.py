@@ -1,3 +1,5 @@
+import copy
+
 import matplotlib.pyplot as plt
 import numpy as np
 from qutip import (
@@ -7,8 +9,6 @@ from qutip import (
     sigmaz,
     mesolve,
     Options,
-    operator_to_vector,
-    vector_to_operator,
     qeye,
     tensor,
     basis,
@@ -157,27 +157,17 @@ class RamseyExperiment:
             / (2 * np.pi)
         )
 
-    def pi_2_pulse(self, H, init_dm, c_ops, tmon_drive_amp: float = 2.0 * np.pi * 0.01):
-        t_pi2 = np.pi / (2 * tmon_drive_amp)
-        (sx, sy, sz) = self.tmon_Pauli_ops()
+    def pi_2_pulse(self, H, init_dm, t, c_ops):
         options = Options(
             store_final_state=True, nsteps=self.nsteps, atol=self.atol, rtol=self.rtol
         )
-        H[0] += 0.5 * tmon_drive_amp * sx
         return mesolve(
             H,
             init_dm,
-            (0, t_pi2),
+            (0, t),
             c_ops=c_ops,
             options=options,
         )
-
-    def ramsey_one_shot(self, H, thermal_state, liouv_delay, c_ops):
-        first_pi_2 = self.pi_2_pulse(H, thermal_state, c_ops)
-        state_after_delay = liouv_delay * operator_to_vector(first_pi_2.final_state)
-        last_pi_2 = self.pi_2_pulse(H, vector_to_operator(state_after_delay), c_ops)
-        result = np.trace(last_pi_2.final_state * self.readout_proj())
-        return result
 
     def readout_proj(self):
         op_list = self.num_cavs * [qeye(self.cavity_dim)] + [
@@ -185,15 +175,18 @@ class RamseyExperiment:
         ]
         return tensor(*op_list)
 
-    def ramsey_indep(self, thermal_state, delay_times, omega_d, c_ops):
+    def ramsey_indep(self, thermal_state, delay_times, omega_d, c_ops, tmon_drive_amp: float = 2.0 * np.pi * 0.01):
         (sx, sy, sz) = self.tmon_Pauli_ops()
         H0_q = -0.5 * (self.omega_tmon - omega_d) * sz
         H = self.hamiltonian()
         H[0] += H0_q
+        H_with_drive = copy.deepcopy(H)
+        H_with_drive[0] += 0.5 * tmon_drive_amp * sx
+        t_pi2 = np.pi / (2 * tmon_drive_amp)
         readout_proj = self.readout_proj()
         final_prob = np.zeros_like(delay_times)
-        state_after_prev_delay = self.pi_2_pulse(H, thermal_state, c_ops).final_state
-        final_state = self.pi_2_pulse(H, state_after_prev_delay, c_ops).final_state
+        state_after_prev_delay = self.pi_2_pulse(H_with_drive, thermal_state, t_pi2, c_ops).final_state
+        final_state = self.pi_2_pulse(H_with_drive, state_after_prev_delay, t_pi2, c_ops).final_state
         final_prob[0] = np.real(np.trace(final_state * readout_proj))
         delay_dif = delay_times[1] - delay_times[0]
         for idx in range(1, len(delay_times)):
@@ -210,7 +203,7 @@ class RamseyExperiment:
                 c_ops=c_ops,
                 options=options,
             ).final_state
-            final_state = self.pi_2_pulse(H, state_after_delay, c_ops).final_state
+            final_state = self.pi_2_pulse(H_with_drive, state_after_delay, t_pi2, c_ops).final_state
             state_after_prev_delay = state_after_delay
             final_prob[idx] = np.real(np.trace(final_state * self.readout_proj()))
         return final_prob
