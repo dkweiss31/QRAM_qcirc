@@ -24,28 +24,28 @@ class SimulateGUEOneWay:
     """
 
     def __init__(
-            self,
-            gamma_b_avg: float,
-            gamma_c_avg: float,
-            gamma_b_dev: float,
-            gamma_c_dev: float,
-            cav_idx_dict: dict,
-            tran_res_idx_dict: dict,
-            cavity_dim: int = 2,
-            scale_b: float = 1.018,
-            scale_c: float = 1.017,
-            t_half: float = 600.0,
-            B: float = 0.006,
-            c: float = 2.8284e-5,
-            Gamma_1_cav: float = 0.0,
-            Gamma_phi_cav: float = 0.0,
-            Gamma_1_transfer_nr: float = 0.0,
-            Gamma_phi_transfer: float = 0.0,
-            nth: float = 0.0,
-            additional_label: bool = True,
-            nsteps: int = 2000,
-            atol: float = 1e-10,
-            rtol: float = 1e-10,
+        self,
+        gamma_b_avg: float,
+        gamma_c_avg: float,
+        gamma_b_dev: float,
+        gamma_c_dev: float,
+        cav_idx_dict: dict,
+        tran_res_idx_dict: dict,
+        cavity_dim: int = 2,
+        scale_b: float = 1.018,
+        scale_c: float = 1.017,
+        t_half: float = 600.0,
+        B: float = 0.006,
+        c: float = 2.8284e-5,
+        Gamma_1_cav: float = 0.0,
+        Gamma_phi_cav: float = 0.0,
+        Gamma_1_transfer_nr: float = 0.0,
+        Gamma_phi_transfer: float = 0.0,
+        nth: float = 0.0,
+        additional_label: bool = True,
+        nsteps: int = 2000,
+        atol: float = 1e-10,
+        rtol: float = 1e-10,
     ):
         self.gamma_b_1 = gamma_b_avg + 0.5 * gamma_b_dev
         self.gamma_b_2 = gamma_b_avg - 0.5 * gamma_b_dev
@@ -80,17 +80,13 @@ class SimulateGUEOneWay:
                 setattr(
                     self,
                     str(label[0:2]),
-                    id_wrap_ops(
-                        destroy(cavity_dim), idx, self.truncated_dims
-                    ),
+                    id_wrap_ops(destroy(cavity_dim), idx, self.truncated_dims),
                 )
             for label, idx in tran_res_idx_dict.items():
                 setattr(
                     self,
                     str(label[0:4]),
-                    id_wrap_ops(
-                        destroy(cavity_dim), idx, self.truncated_dims
-                    ),
+                    id_wrap_ops(destroy(cavity_dim), idx, self.truncated_dims),
                 )
         else:
             for label, idx in cav_idx_dict.items():
@@ -98,9 +94,7 @@ class SimulateGUEOneWay:
                     self,
                     str(label[0:2]),
                     tensor(
-                        id_wrap_ops(
-                            destroy(cavity_dim), idx, self.truncated_dims
-                        ),
+                        id_wrap_ops(destroy(cavity_dim), idx, self.truncated_dims),
                         qeye(2),
                     ),
                 )
@@ -109,9 +103,7 @@ class SimulateGUEOneWay:
                     self,
                     str(label[0:4]),
                     tensor(
-                        id_wrap_ops(
-                            destroy(cavity_dim), idx, self.truncated_dims
-                        ),
+                        id_wrap_ops(destroy(cavity_dim), idx, self.truncated_dims),
                         qeye(2),
                     ),
                 )
@@ -126,28 +118,28 @@ class SimulateGUEOneWay:
 
     def collective_loss_ops(self):
         L_R_b = (
-                np.sqrt(self.gamma_b_1) * self.b1_r
-                - 1j * np.sqrt(self.gamma_b_2) * self.b2_r
+            np.sqrt(self.gamma_b_1) * self.b1_r
+            - 1j * np.sqrt(self.gamma_b_2) * self.b2_r
         )
         L_R_c = (
-                np.exp(-1j * self.phi)
-                * (-1j)
-                * (
-                        np.sqrt(self.gamma_c_1) * self.c1_r
-                        - 1j * np.sqrt(self.gamma_c_2) * self.c2_r
-                )
+            np.exp(-1j * self.phi)
+            * (-1j)
+            * (
+                np.sqrt(self.gamma_c_1) * self.c1_r
+                - 1j * np.sqrt(self.gamma_c_2) * self.c2_r
+            )
         )
         L_L_b = (
-                np.sqrt(self.gamma_b_1) * self.b1_r
-                + 1j * np.sqrt(self.gamma_b_2) * self.b2_r
+            np.sqrt(self.gamma_b_1) * self.b1_r
+            + 1j * np.sqrt(self.gamma_b_2) * self.b2_r
         )
         L_L_c = (
-                np.exp(1j * self.phi)
-                * 1j
-                * (
-                        np.sqrt(self.gamma_c_1) * self.c1_r
-                        + 1j * np.sqrt(self.gamma_c_2) * self.c2_r
-                )
+            np.exp(1j * self.phi)
+            * 1j
+            * (
+                np.sqrt(self.gamma_c_1) * self.c1_r
+                + 1j * np.sqrt(self.gamma_c_2) * self.c2_r
+            )
         )
         return L_R_b, L_R_c, L_L_b, L_L_c
 
@@ -184,18 +176,19 @@ class SimulateGUEOneWay:
 
     def gamma_b_func(self, t, args=None):
         return (
-                self.scale_b
-                * np.sqrt(self.gamma_b_avg)
-                * np.sqrt(
-            (
+            self.scale_b
+            * np.sqrt(self.gamma_b_avg)
+            * np.sqrt(
+                (
                     0.5
                     * np.exp(-self.c * (t - self.t_half) ** 2)
                     / (
-                            (1 / self.B)
-                            - np.sqrt(np.pi / (4 * self.c)) * erf(np.sqrt(self.c) * (t - self.t_half))
+                        (1 / self.B)
+                        - np.sqrt(np.pi / (4 * self.c))
+                        * erf(np.sqrt(self.c) * (t - self.t_half))
                     )
+                )
             )
-        )
         )
 
     def gamma_c_func(self, t, args=None):
@@ -212,9 +205,9 @@ class SimulateGUEOneWay:
         return H0_r, H_int_b_1, H_int_b_2, H_int_c_1, H_int_c_2
 
     def run_state_transfer(
-            self,
-            init_state,
-            e_ops=None,
+        self,
+        init_state,
+        e_ops=None,
     ) -> Qobj:
         if e_ops is None:
             e_ops = []
@@ -241,21 +234,21 @@ class SimulateGUEOneWay:
 
     @staticmethod
     def state_transfer_fidelity(
-            real_final_states: dict,
-            ideal_final_cardinal_states: dict,
-            measurement_op: Qobj = None,
+        real_final_states: dict,
+        ideal_final_cardinal_states: dict,
+        measurement_op: Qobj = None,
     ):
         fidel = 0.0
         total_prob = 0.0
         num_states = len(ideal_final_cardinal_states)
         for (real_final_state, ideal_final_state) in zip(
-                real_final_states.values(), ideal_final_cardinal_states.values()
+            real_final_states.values(), ideal_final_cardinal_states.values()
         ):
             norm = np.trace(real_final_state)
             real_final_state = real_final_state / norm
             if measurement_op is not None:
                 real_final_state = (
-                        measurement_op * real_final_state * measurement_op.dag()
+                    measurement_op * real_final_state * measurement_op.dag()
                 )
                 prob = np.trace(real_final_state)
                 real_final_state = real_final_state / prob
@@ -265,24 +258,62 @@ class SimulateGUEOneWay:
 
 
 class SimulateGUEOneWayDR(SimulateGUEOneWay, DualRailGUEMixin):
-    def __init__(self, gamma_b_avg, gamma_c_avg, gamma_b_dev, gamma_c_dev, cav_idx_dict: dict, tran_res_idx_dict: dict,
-                 cavity_dim: int = 2, scale_b: float = 1.018, scale_c: float = 1.017, t_half: float = 600.0,
-                 B: float = 0.006, c: float = 2.8284e-5, Gamma_1_cav: float = 0.0, Gamma_phi_cav: float = 0.0,
-                 Gamma_1_transfer_nr: float = 0.0, Gamma_phi_transfer: float = 0.0, nth: float = 0.0,
-                 additional_label: bool = False,
-                 nsteps: int = 2000, atol: float = 1e-10, rtol: float = 1e-10):
+    def __init__(
+        self,
+        gamma_b_avg,
+        gamma_c_avg,
+        gamma_b_dev,
+        gamma_c_dev,
+        cav_idx_dict: dict,
+        tran_res_idx_dict: dict,
+        cavity_dim: int = 2,
+        scale_b: float = 1.018,
+        scale_c: float = 1.017,
+        t_half: float = 600.0,
+        B: float = 0.006,
+        c: float = 2.8284e-5,
+        Gamma_1_cav: float = 0.0,
+        Gamma_phi_cav: float = 0.0,
+        Gamma_1_transfer_nr: float = 0.0,
+        Gamma_phi_transfer: float = 0.0,
+        nth: float = 0.0,
+        additional_label: bool = False,
+        nsteps: int = 2000,
+        atol: float = 1e-10,
+        rtol: float = 1e-10,
+    ):
 
-        super().__init__(gamma_b_avg, gamma_c_avg, gamma_b_dev, gamma_c_dev, cav_idx_dict, tran_res_idx_dict,
-                         cavity_dim, scale_b, scale_c, t_half, B, c, Gamma_1_cav, Gamma_phi_cav, Gamma_1_transfer_nr,
-                         Gamma_phi_transfer, nth, additional_label, nsteps, atol, rtol)
+        super().__init__(
+            gamma_b_avg,
+            gamma_c_avg,
+            gamma_b_dev,
+            gamma_c_dev,
+            cav_idx_dict,
+            tran_res_idx_dict,
+            cavity_dim,
+            scale_b,
+            scale_c,
+            t_half,
+            B,
+            c,
+            Gamma_1_cav,
+            Gamma_phi_cav,
+            Gamma_1_transfer_nr,
+            Gamma_phi_transfer,
+            nth,
+            additional_label,
+            nsteps,
+            atol,
+            rtol,
+        )
 
     def rightward_state(self, idx_0, idx_1):
         assert idx_1 == idx_0 + 1
         dim_0 = self.truncated_dims[idx_0]
         dim_1 = self.truncated_dims[idx_1]
         right_state = (
-                tensor(basis(dim_0, 1), basis(dim_1, 0))
-                + 1j * tensor(basis(dim_0, 0), basis(dim_1, 1))
+            tensor(basis(dim_0, 1), basis(dim_1, 0))
+            + 1j * tensor(basis(dim_0, 0), basis(dim_1, 1))
         ).unit()
         return right_state
 
@@ -301,8 +332,8 @@ class SimulateGUEOneWayDR(SimulateGUEOneWay, DualRailGUEMixin):
         else:
             id_op = qeye([dim_0, dim_1])
         return (
-                tensor(right_state_proj, id_op)
-                + tensor(id_op, right_state_proj)
-                + tensor(left_state_proj, id_op)
-                + tensor(id_op, left_state_proj)
+            tensor(right_state_proj, id_op)
+            + tensor(id_op, right_state_proj)
+            + tensor(left_state_proj, id_op)
+            + tensor(id_op, left_state_proj)
         )
