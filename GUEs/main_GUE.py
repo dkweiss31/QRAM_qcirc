@@ -1,5 +1,3 @@
-from functools import partial
-
 from qutip import tensor, basis
 
 from simulate_GUE import SimulateGUEOneWay, SimulateGUEOneWayDR
@@ -12,47 +10,10 @@ from utils.utils import construct_basis_states_list, write_to_h5
 
 
 def main_GUE(filepath, param_dict):
-    gamma_b_avg = param_dict["gamma_b_avg"]
-    gamma_c_avg = param_dict["gamma_c_avg"]
-    gamma_b_dev = param_dict["gamma_b_dev"]
-    gamma_c_dev = param_dict["gamma_c_dev"]
     cavity_dim = param_dict["cavity_dim"]
-    scale_b = param_dict["scale_b"]
-    scale_c = param_dict["scale_c"]
-    t_half = param_dict["t_half"]
-    B = param_dict["B"]
-    c = param_dict["c"]
-    num_cpus = param_dict["num_cpus"]
-    Gamma_1_cav = param_dict["Gamma_1_cav"]
-    Gamma_1_transfer_nr = param_dict["Gamma_1_transfer_nr"]
-    Gamma_phi_cav = param_dict["Gamma_phi_cav"]
-    Gamma_phi_transfer = param_dict["Gamma_phi_transfer"]
-    nth = param_dict["nth"]
-    nsteps = param_dict["nsteps"]
-    atol = param_dict["atol"]
-    rtol = param_dict["rtol"]
-    guefidelity_label = SimulateGUEOneWay(
-        gamma_b_avg=gamma_b_avg,
-        gamma_b_dev=gamma_b_dev,
-        gamma_c_avg=gamma_c_avg,
-        gamma_c_dev=gamma_c_dev,
-        cavity_dim=cavity_dim,
-        additional_label=True,  # make more general plz
-        nsteps=nsteps,
-        atol=atol,
-        rtol=rtol,
-    )
-    guefidelity_label_DR = SimulateGUEOneWayDR(
-        gamma_b_avg=gamma_b_avg,
-        gamma_b_dev=gamma_b_dev,
-        gamma_c_avg=gamma_c_avg,
-        gamma_c_dev=gamma_c_dev,
-        cavity_dim=cavity_dim,
-        additional_label=True,
-        nsteps=nsteps,
-        atol=atol,
-        rtol=rtol,
-    )
+    num_cpus = param_dict.pop("num_cpus")
+    guefidelity_label = SimulateGUEOneWay(**param_dict)
+    guefidelity_label_DR = SimulateGUEOneWayDR(**param_dict)
     c1_idx = guefidelity_label_DR.c1_idx
     c2_idx = guefidelity_label_DR.c2_idx
 
@@ -73,21 +34,6 @@ def main_GUE(filepath, param_dict):
 
     psi_init = (state_1000 + 1j * state_0100).unit()
     psi_fin = (state_0010 + 1j * state_0001).unit()
-    c_ops = guefidelity_label.construct_c_ops(
-        Gamma_1_cav=Gamma_1_cav,
-        Gamma_1_transfer_nr=Gamma_1_transfer_nr,
-        Gamma_phi_cav=Gamma_phi_cav,
-        Gamma_phi_transfer=Gamma_phi_transfer,
-        nth=nth,
-    )
-    pulse_args = {
-        "c": c,
-        "B": B,
-        "t_half": t_half,
-        "gamma_b_avg": gamma_b_avg,
-        "scale_b": scale_b,
-        "scale_c": scale_c,
-    }
 
     def append_label(states, labels):
         assert states[0].isket
@@ -114,11 +60,8 @@ def main_GUE(filepath, param_dict):
         ideal_final_basis_states, label_list=label_list_SR
     )
     # first calc state transfer fidel in the SR case
-    partial_state_tran = partial(
-        guefidelity_label.run_state_transfer, pulse_args, c_ops, None
-    )
     final_SR_states = apply_gate_to_states(
-        partial_state_tran, initial_cardinal_states, num_cpus
+        guefidelity_label.run_state_transfer, initial_cardinal_states, num_cpus
     )
 
     # trace out initial GUEs as well as transfer resonators. Keep final GUE and additional label

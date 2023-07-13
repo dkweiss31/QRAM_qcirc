@@ -165,7 +165,10 @@ def write_to_h5(filepath, data_dict, param_dict, loud=True):
         for key, val in data_dict.items():
             written_data = f.create_dataset(key, data=val)
         for kwarg in param_dict.keys():
-            f.attrs[kwarg] = param_dict[kwarg]
+            try:
+                f.attrs[kwarg] = param_dict[kwarg]
+            except TypeError:
+                f.attrs[kwarg] = str(param_dict[kwarg])
 
 
 def extract_info_from_h5(filepath):
@@ -176,7 +179,10 @@ def extract_info_from_h5(filepath):
             data = f[key][()]
             data_dict[key] = data
         for key in f.attrs.keys():
-            read_param_dict[key] = f.attrs[key][()]
+            try:
+                read_param_dict[key] = f.attrs[key][()]
+            except TypeError:
+                read_param_dict[key] = f.attrs[key]
     return data_dict, read_param_dict
 
 
