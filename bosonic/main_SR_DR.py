@@ -1,7 +1,7 @@
 from functools import partial
 
 import numpy as np
-from qutip import tensor, destroy, Qobj, to_super, qeye
+from qutip import tensor, destroy, Qobj, to_super
 
 from simulate_bosonic_ops import SimulateBosonicOperations, SimulateBosonicOperationsDR
 from utils.fidelity import Fidelity
@@ -27,7 +27,6 @@ def main(filepath, param_dict):
     eta_gg = param_dict["eta_gg"]
     eta_ge = param_dict["eta_ge"]
     eta_gf = param_dict["eta_gf"]
-    postselection = param_dict["postselection"]
     liouv = param_dict["liouvillian"]
     num_cpus = param_dict["num_cpus"]
     atol = param_dict["atol"]
@@ -107,35 +106,39 @@ def main(filepath, param_dict):
             label: bosonic_sim_DR.DR_state_from_SR_ops(label, final_SR_ops)
             for label, state in unique_state_dict_DR.items()
         }
-    if postselection:
-        measurement_op_parity = bosonic_sim_DR.measurement_op_DR_parity()
-        measurement_op_tmon_DR = tensor(measurement_op_SR, measurement_op_SR)
-        measurement_op_DR = measurement_op_parity * measurement_op_tmon_DR
-    else:
-        measurement_op_SR = qeye(truncated_dims_SR)
-        measurement_op_DR = tensor(qeye(truncated_dims_SR), qeye(truncated_dims_SR))
-    e_fidel_SR, prob_SR = fidelity_SR.entanglement_fidelity_nielsen(
+    measurement_op_parity = bosonic_sim_DR.measurement_op_DR_parity()
+    measurement_op_tmon_DR = tensor(measurement_op_SR, measurement_op_SR)
+    measurement_op_DR = measurement_op_parity * measurement_op_tmon_DR
+    e_fidel_SR, prob_SR, e_fidel_SR_nops = fidelity_SR.entanglement_fidelity_nielsen(
         final_SR,
         projected_ideal_SR,
         measurement_op=measurement_op_SR,
     )
-    e_fidel_DR, prob_DR = fidelity_DR.entanglement_fidelity_nielsen(
+    e_fidel_DR, prob_DR, e_fidel_DR_nops = fidelity_DR.entanglement_fidelity_nielsen(
         final_DR,
         projected_ideal_DR,
         measurement_op=measurement_op_DR,
     )
     process_fidel_SR = fidelity_SR.process_fidelity_nielsen(e_fidel_SR / prob_SR)
+    process_fidel_SR_nops = fidelity_SR.process_fidelity_nielsen(e_fidel_SR_nops)
     process_fidel_DR = fidelity_DR.process_fidelity_nielsen(e_fidel_DR / prob_DR)
+    process_fidel_DR_nops = fidelity_DR.process_fidelity_nielsen(e_fidel_DR_nops)
     print(f"entanglement fidelity, success prob single rail: {e_fidel_SR, prob_SR}")
     print(f"postselected process fidelity single rail:  {process_fidel_SR}")
+    print(f"unpostselected process fidelity single rail:  {process_fidel_SR_nops}")
     print(f"entanglement fidelity, success prob dual rail: {e_fidel_DR, prob_DR}")
     print(f"postselected process fidelity dual rail:  {process_fidel_DR}")
+    print(f"unpostselected process fidelity dual rail:  {process_fidel_DR_nops}")
     data_dict = {
         "e_fidel_SR": e_fidel_SR,
+        "e_fidel_SR_nops": e_fidel_SR_nops,
         "e_fidel_DR": e_fidel_DR,
+        "e_fidel_DR_nops": e_fidel_DR_nops,
         "prob_SR": prob_SR,
         "prob_DR": prob_DR,
         "process_fidel_SR": process_fidel_SR,
+        "process_fidel_SR_nops": process_fidel_SR_nops,
         "process_fidel_DR": process_fidel_DR,
+        "process_fidel_DR_nops": process_fidel_DR_nops,
     }
     write_to_h5(filepath, data_dict, param_dict)

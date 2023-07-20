@@ -68,6 +68,7 @@ class Fidelity:
             self.basis_states, self.label_list
         )
         overall_contr = 0.0
+        overall_contr_nops = 0.0
         total_prob = 0.0
         # TODO want to change num_states indexing so that we only sum over unique states
         num_states = 0
@@ -81,17 +82,28 @@ class Fidelity:
                 # we've tracked individual states instead
                 else:
                     propagated_rho = prop_or_final_states_dict[label]
-                state_contr, prob = self._fidel_individual_state(
+                if measurement_op is not None:
+                    # do the postselected calculation
+                    prop_meas_rho = measurement_op * propagated_rho * measurement_op.dag()
+                    prob = np.trace(prop_meas_rho)
+                    state_contr = self._fidel_individual_state(
+                        prop_meas_rho,
+                        op,
+                        U_ideal,
+                        ptrace_idxs,
+                    )
+                    overall_contr += coeff * state_contr
+                    total_prob += prob
+                # also always do the calculation for the unmeasured state (no postselection)
+                state_contr_nops = self._fidel_individual_state(
                     propagated_rho,
                     op,
                     U_ideal,
-                    measurement_op,
                     ptrace_idxs,
                 )
-                overall_contr += coeff * state_contr
-                total_prob += prob
+                overall_contr_nops += coeff * state_contr_nops
                 num_states += 1
-        return overall_contr / dim**2, total_prob / num_states
+        return overall_contr / dim**2, total_prob / num_states, overall_contr_nops / dim**2
 
     def _fidel_individual_state(
         self,
@@ -102,11 +114,6 @@ class Fidelity:
         ptrace_idxs=None,
     ):
         """see above function for documentation"""
-        if measurement_op is not None:
-            propagated_rho = measurement_op * propagated_rho * measurement_op.dag()
-            prob = np.trace(propagated_rho)
-        else:
-            prob = 0.0
         if ptrace_idxs is not None:
             propagated_rho = propagated_rho.ptrace(ptrace_idxs)
             op = op.ptrace(ptrace_idxs)
@@ -116,4 +123,4 @@ class Fidelity:
         state_contr = np.trace(
             U_ideal * projected_op.dag() * U_ideal.dag() * projected_rho
         )
-        return state_contr, prob
+        return state_contr
