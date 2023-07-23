@@ -1,6 +1,6 @@
 from qutip import tensor, basis
 
-from simulate_GUE import SimulateGUEOneWay, SimulateGUEOneWayDR
+from GUEs.simulate_GUE import SimulateGUE, SimulateGUEDR
 from utils.quantum_helpers import (
     operator_basis_lidar,
     apply_gate_to_states,
@@ -12,8 +12,8 @@ from utils.utils import construct_basis_states_list, write_to_h5
 def main_GUE(filepath, param_dict):
     cavity_dim = param_dict["cavity_dim"]
     num_cpus = param_dict.pop("num_cpus")
-    guefidelity_label = SimulateGUEOneWay(**param_dict)
-    guefidelity_label_DR = SimulateGUEOneWayDR(**param_dict)
+    guefidelity_label = SimulateGUE(**param_dict)
+    guefidelity_label_DR = SimulateGUEDR(**param_dict)
     c1_idx = guefidelity_label_DR.c1_idx
     c2_idx = guefidelity_label_DR.c2_idx
 

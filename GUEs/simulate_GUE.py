@@ -14,7 +14,7 @@ from utils.dual_rail import DualRailGUEMixin
 from utils.utils import id_wrap_ops
 
 
-class SimulateGUEOneWay:
+class SimulateGUE:
     """
     compute the fidelity of state transfer for GUEs
     Parameters
@@ -208,6 +208,7 @@ class SimulateGUEOneWay:
         self,
         init_state,
         e_ops=None,
+        final_state_only=True,
     ) -> Qobj:
         if e_ops is None:
             e_ops = []
@@ -223,14 +224,18 @@ class SimulateGUEOneWay:
         options = Options(
             store_final_state=True, atol=self.atol, rtol=self.rtol, nsteps=self.nsteps
         )
-        return mesolve(
-            H,
-            init_state,
-            tlist,
-            c_ops=self.construct_c_ops(),
-            e_ops=e_ops,
-            options=options,
-        ).final_state
+        result = mesolve(
+                H,
+                init_state,
+                tlist,
+                c_ops=self.construct_c_ops(),
+                e_ops=e_ops,
+                options=options,
+            )
+        if final_state_only:
+            return result.final_state
+        else:
+            return result
 
     @staticmethod
     def state_transfer_fidelity(
@@ -257,7 +262,41 @@ class SimulateGUEOneWay:
         return fidel / num_states, total_prob / num_states
 
 
-class SimulateGUEOneWayDR(SimulateGUEOneWay, DualRailGUEMixin):
+class SimulateGUEv2(SimulateGUE):
+    def __init__(self, gamma_b_avg: float, gamma_c_avg: float, gamma_b_dev: float, gamma_c_dev: float,
+                 cav_idx_dict: dict, tran_res_idx_dict: dict,
+                 cavity_dim: int = 2,
+                 scale_b: float = 1.0,
+                 scale_c: float = 1.0,
+                 t_half: float = 600.0,
+                 B: float = 0.006,
+                 c: float = 2.8284e-5,
+                 Gamma_1_cav: float = 0.0,
+                 Gamma_phi_cav: float = 0.0,
+                 Gamma_1_transfer_nr: float = 0.0,
+                 Gamma_phi_transfer: float = 0.0,
+                 nth: float = 0.0,
+                 additional_label: bool = True,
+                 nsteps: int = 2000,
+                 atol: float = 1e-10,
+                 rtol: float = 1e-10,
+                 gammaph=2.0 * np.pi * 0.01):
+        super().__init__(gamma_b_avg, gamma_c_avg, gamma_b_dev, gamma_c_dev, cav_idx_dict, tran_res_idx_dict,
+                         cavity_dim=cavity_dim, scale_b=scale_b, scale_c=scale_c, t_half=t_half, B=B, c=c,
+                         Gamma_1_cav=Gamma_1_cav, Gamma_phi_cav=Gamma_phi_cav, Gamma_1_transfer_nr=Gamma_1_transfer_nr,
+                         Gamma_phi_transfer=Gamma_phi_transfer, nth=nth, additional_label=additional_label,
+                         nsteps=nsteps, atol=atol, rtol=rtol)
+        self.gammaph = gammaph
+
+    def gamma_b_func(self, t, args=None):
+        gammaph = self.gammaph
+        denom = 4.0 * np.cosh(gammaph * t / 2) * np.sqrt((1 + np.exp(gammaph * t)) * self.gamma_b_avg/gammaph -
+                                                         np.exp(gammaph * t))
+        num = gammaph * (1 - np.exp(gammaph * t) + (1 + np.exp(gammaph * t)) * self.gamma_b_avg/gammaph)
+        return num / denom
+
+
+class SimulateGUEDR(SimulateGUE, DualRailGUEMixin):
     def __init__(
         self,
         gamma_b_avg,
@@ -337,3 +376,51 @@ class SimulateGUEOneWayDR(SimulateGUEOneWay, DualRailGUEMixin):
             + tensor(left_state_proj, id_op)
             + tensor(id_op, left_state_proj)
         )
+
+
+class SimulateGUEDRv2(SimulateGUEv2, DualRailGUEMixin):
+    def __init__(self,
+        gamma_b_avg,
+        gamma_c_avg,
+        gamma_b_dev,
+        gamma_c_dev,
+        cav_idx_dict: dict,
+        tran_res_idx_dict: dict,
+        cavity_dim: int = 2,
+        scale_b: float = 1.018,
+        scale_c: float = 1.017,
+        t_half: float = 600.0,
+        B: float = 0.006,
+        c: float = 2.8284e-5,
+        Gamma_1_cav: float = 0.0,
+        Gamma_phi_cav: float = 0.0,
+        Gamma_1_transfer_nr: float = 0.0,
+        Gamma_phi_transfer: float = 0.0,
+        nth: float = 0.0,
+        additional_label: bool = False,
+        nsteps: int = 2000,
+        atol: float = 1e-10,
+        rtol: float = 1e-10,
+        gammaph: float = 2.0 * np.pi * 0.01):
+        super().__init__(gamma_b_avg,
+            gamma_c_avg,
+            gamma_b_dev,
+            gamma_c_dev,
+            cav_idx_dict,
+            tran_res_idx_dict,
+            cavity_dim,
+            scale_b,
+            scale_c,
+            t_half,
+            B,
+            c,
+            Gamma_1_cav,
+            Gamma_phi_cav,
+            Gamma_1_transfer_nr,
+            Gamma_phi_transfer,
+            nth,
+            additional_label,
+            nsteps,
+            atol,
+            rtol,
+            gammaph,)

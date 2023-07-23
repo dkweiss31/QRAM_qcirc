@@ -18,7 +18,7 @@ from utils.utils import (
 )
 
 
-def main(filepath, param_dict):
+def main_SR_DR(filepath, param_dict):
     tmon_dim = param_dict["tmon_dim"]
     cavity_dim = param_dict["cavity_dim"]
     chi = param_dict["chi"]
