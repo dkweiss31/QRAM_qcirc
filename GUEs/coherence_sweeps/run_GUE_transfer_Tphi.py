@@ -13,3 +13,7 @@ def run_GUE_transfer_Tphi():
         ideal_param_dict["Gamma_phi_transfer"] = 1.0 / Tphi
         ideal_param_dict["num_cpus"] = 8
         main_GUE(filepath, ideal_param_dict)
+
+
+if __name__ == "__main__":
+    run_GUE_transfer_Tphi()

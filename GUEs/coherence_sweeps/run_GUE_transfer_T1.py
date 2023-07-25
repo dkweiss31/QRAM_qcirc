@@ -14,3 +14,7 @@ def run_GUE_transfer_T1():
         ideal_param_dict["Gamma_1_transfer_nr"] = 1.0 / T1
         ideal_param_dict["num_cpus"] = 8
         main_GUE(filepath, ideal_param_dict)
+
+
+if __name__ == "__main__":
+    run_GUE_transfer_T1()

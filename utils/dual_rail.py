@@ -65,15 +65,3 @@ class DualRailMixin:
         SR_label_1 = DR_label_1[0:2] + DR_label_2[0:2]
         SR_label_2 = DR_label_1[2:4] + DR_label_2[2:4]
         return tensor(final_SR_ops[SR_label_1], final_SR_ops[SR_label_2])
-
-
-class DualRailGUEMixin(DualRailMixin):
-    @staticmethod
-    def DR_basis(SR_comp_bas_states):
-        """assumption is that SR_comp_bas_states = [|0>, |1>_{R}, |1>_{L}] in terms of logical states"""
-        return [
-            tensor(SR_comp_bas_states[1], SR_comp_bas_states[0]),
-            tensor(SR_comp_bas_states[2], SR_comp_bas_states[0]),
-            tensor(SR_comp_bas_states[0], SR_comp_bas_states[1]),
-            tensor(SR_comp_bas_states[0], SR_comp_bas_states[2]),
-        ]
