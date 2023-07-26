@@ -270,7 +270,7 @@ class Hashing:
 
         Returns
         -------
-        ndarray
+        Qobj
         """
         basis_vectors = self.gen_basis_vectors(
             self.number_degrees_freedom, self.num_exc
@@ -287,6 +287,12 @@ class Hashing:
                 ):  # Should not be the case here, only an issue for charge basis
                     a[basis_index, w] = temp_coefficient
         return Qobj(a)
+
+    def trace_out_dict(self, state_dict, keep_idxs):
+        return {
+            label: self.ptrace(final_state, keep_idxs)
+            for label, final_state in state_dict.items()
+        }
 
     def _find_lowered_vector(
         self,

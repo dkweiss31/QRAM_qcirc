@@ -1,27 +1,20 @@
 import numpy as np
 from qutip import tensor, basis, Qobj
 
-from GUEs.simulate_GUE import SimulateGUE, SimulateGUEDR, SimulateGUEHashing, SimulateGUEHashingDR
-from utils.hashing import Hashing
-from utils.quantum_helpers import (
-    operator_basis_lidar,
-    apply_gate_to_states,
-    operators_from_states,
+from GUEs.simulate_GUE import (
+    SimulateGUE,
+    SimulateGUEDR,
+    SimulateGUEHashing,
+    SimulateGUEHashingDR,
 )
+from utils.hashing import Hashing
 from utils.utils import construct_basis_states_list, write_to_h5
 
 
 def main_GUE(filepath, param_dict):
     cavity_dim = param_dict["cavity_dim"]
-    num_cpus = param_dict["num_cpus"]
     hashing = param_dict.pop("hashing")
     if hashing:
-
-        def trace_out_dict(state_dict, keep_idxs):
-            return {
-                label: guefidelity.ptrace(final_state, keep_idxs)
-                for label, final_state in state_dict.items()
-            }
         guefidelity = SimulateGUEHashing(**param_dict)
         guefidelity_DR = SimulateGUEHashingDR(**param_dict)
         hashing_hilbert_dim = guefidelity.hilbert_dim()
@@ -40,12 +33,6 @@ def main_GUE(filepath, param_dict):
         red_c2 = new_hash.a_operator(1)
         right_state = ((red_c1.dag() + 1j * red_c2.dag()) * zero_state).unit()
     else:
-
-        def trace_out_dict(state_dict, keep_idxs):
-            return {
-                label: final_state.ptrace(keep_idxs)
-                for label, final_state in state_dict.items()
-            }
         guefidelity = SimulateGUE(**param_dict)
         guefidelity_DR = SimulateGUEDR(**param_dict)
         Fock_states_spec = [
@@ -76,30 +63,17 @@ def main_GUE(filepath, param_dict):
         tensor(right_state, zero_state),
         tensor(zero_state, right_state),
     ]
-    op_dict_SR, initial_cardinal_states = operator_basis_lidar(
-        initial_basis_states, label_list=label_list_SR
-    )
-    _, ideal_final_cardinal_states = operator_basis_lidar(
-        ideal_final_basis_states, label_list=label_list_SR
-    )
-    # first calc state transfer fidel in the SR case
-    final_SR_states = apply_gate_to_states(
-        guefidelity.run_state_transfer, initial_cardinal_states, num_cpus
-    )
-    final_SR_states = trace_out_dict(final_SR_states, keep_idxs)
-    fidel_SR, _ = guefidelity.state_transfer_fidelity(
-        final_SR_states, ideal_final_cardinal_states
+    fidel_SR, final_SR_states = guefidelity.overall_state_transfer_fidelity(
+        initial_basis_states, label_list_SR, ideal_final_basis_states, keep_idxs
     )
     print(f"fidelity of SR state transfer is {fidel_SR}")
-    _, ideal_final_cardinal_states_DR = operator_basis_lidar(
-        ideal_final_basis_states_DR, label_list=label_list_DR
+    final_DR_states, ideal_final_cardinal_states_DR = guefidelity_DR.DR_final_states(
+        initial_basis_states,
+        label_list_SR,
+        ideal_final_basis_states_DR,
+        label_list_DR,
+        final_SR_states,
     )
-    # no need to trace out op_dict_SR since its only used for labels and coefficients decomposition
-    final_SR_ops = operators_from_states(op_dict_SR, final_SR_states)
-    final_DR_states = {
-        label: guefidelity_DR.DR_state_from_SR_ops(label, final_SR_ops)
-        for label, state in ideal_final_cardinal_states_DR.items()
-    }
     meas_op_DR = sum([state * state.dag() for state in ideal_final_basis_states_DR])
     fidel_DR, prob_DR = guefidelity_DR.state_transfer_fidelity(
         final_DR_states, ideal_final_cardinal_states_DR, measurement_op=meas_op_DR

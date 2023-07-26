@@ -1,6 +1,8 @@
 import numpy as np
 from qutip import tensor, Qobj
 
+from utils.quantum_helpers import operator_basis_lidar, operators_from_states
+
 
 class DualRailMixin:
     @staticmethod
@@ -66,3 +68,18 @@ class DualRailMixin:
         SR_label_1 = DR_label_1[0:len_DR_label_2] + DR_label_2[0:len_DR_label_2]
         SR_label_2 = DR_label_1[len_DR_label_2:2*len_DR_label_2] + DR_label_2[len_DR_label_2:2*len_DR_label_2]
         return tensor(final_SR_ops[SR_label_1], final_SR_ops[SR_label_2])
+
+    def DR_final_states(self, SR_basis_states, SR_labels, DR_ideal_final_basis_states, DR_labels,
+                        SR_final_cardinal_states):
+        op_dict_SR, initial_cardinal_states = operator_basis_lidar(
+            SR_basis_states, label_list=SR_labels
+        )
+        _, ideal_final_cardinal_states_DR = operator_basis_lidar(
+            DR_ideal_final_basis_states, label_list=DR_labels
+        )
+        final_SR_ops = operators_from_states(op_dict_SR, SR_final_cardinal_states)
+        final_DR_states = {
+            label: self.DR_state_from_SR_ops(label, final_SR_ops)
+            for label, state in ideal_final_cardinal_states_DR.items()
+        }
+        return final_DR_states, ideal_final_cardinal_states_DR
