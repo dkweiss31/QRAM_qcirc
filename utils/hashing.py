@@ -194,15 +194,18 @@ class Hashing:
             ]
         )
 
-    def gen_basis_vectors(self, number_degrees_freedom, num_exc) -> ndarray:
+    def gen_basis_vectors(self, number_degrees_freedom=None, num_exc=None) -> ndarray:
         """Generate basis vectors using Zhang algorithm. `func` allows for inclusion of other vectors,
         such as those with negative entries (see CurrentMirrorGlobal)"""
-        sites = number_degrees_freedom
-        vector_list = [np.zeros(sites)]
+        if number_degrees_freedom is None:
+            number_degrees_freedom = self.number_degrees_freedom
+        if num_exc is None:
+            num_exc = self.num_exc
+        vector_list = [np.zeros(number_degrees_freedom)]
         for total_exc in range(
             1, num_exc + 1
         ):  # No excitation number conservation as in [1]
-            previous_vector = np.zeros(sites)
+            previous_vector = np.zeros(number_degrees_freedom)
             previous_vector[0] = total_exc
             vector_list.append(previous_vector)
             while (
@@ -214,9 +217,7 @@ class Hashing:
         return np.array(vector_list)
 
     def ptrace(self, density_matrix, keep_idxs):
-        basis_vectors = self.gen_basis_vectors(
-            self.number_degrees_freedom, self.num_exc
-        )
+        basis_vectors = self.gen_basis_vectors()
         num_keep_idxs = len(keep_idxs)
         remove_idxs = np.array(
             [idx for idx in range(self.number_degrees_freedom) if idx not in keep_idxs]
@@ -272,9 +273,7 @@ class Hashing:
         -------
         Qobj
         """
-        basis_vectors = self.gen_basis_vectors(
-            self.number_degrees_freedom, self.num_exc
-        )
+        basis_vectors = self.gen_basis_vectors()
         tags, index_array = self._gen_tags(basis_vectors)
         dim = self.hilbert_dim()
         a = np.zeros((dim, dim))
