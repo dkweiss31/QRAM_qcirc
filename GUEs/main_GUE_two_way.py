@@ -21,7 +21,7 @@ def main_GUE_two_way(filepath, param_dict):
     label_list_DR = ["R0", "L0", "0R", "0L"]
     keep_idxs = [guefidelity.a1_idx, guefidelity.a2_idx, guefidelity.c1_idx, guefidelity.c2_idx]
     initial_basis_states = [state_000000, psi_init_R, psi_init_L]
-    red_hash = Hashing(number_degrees_freedom=4, num_exc=2)
+    red_hash = Hashing(number_degrees_freedom=4, num_exc=param_dict["num_exc"])
     red_hilbert_dim = red_hash.hilbert_dim()
     vac = np.zeros(red_hilbert_dim)
     vac[0] = 1.0
