@@ -22,7 +22,6 @@ ideal_param_dict = {
     "Gamma_phi_cav": 0.0,
     "Gamma_phi_transfer": 0.0,
     "nth": 0.0,
-    "additional_label": True,
     "nsteps": 3000,
     "atol": 1e-12,
     "rtol": 1e-12,
@@ -47,7 +46,6 @@ param_dict_1 = {
     "Gamma_phi_cav": 1.0 / (5000 * 10 ** 3),  #
     "Gamma_phi_transfer": 1.0 / (100 * 10**3),
     "nth": 0.01,
-    "additional_label": True,
     "nsteps": 3000,
     "atol": 1e-12,
     "rtol": 1e-12,
@@ -75,7 +73,6 @@ param_dict_2 = {
     "Gamma_phi_cav": 1.0 / Tphi_res,
     "Gamma_phi_transfer": 1.0 / (200 * 10**3),
     "nth": 0.01,
-    "additional_label": True,
     "nsteps": 3000,
     "atol": 1e-12,
     "rtol": 1e-12,

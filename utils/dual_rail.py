@@ -62,6 +62,7 @@ class DualRailMixin:
             SR_label_1 = "0001" -> |00><01|
             return |1100><1001|
         """
-        SR_label_1 = DR_label_1[0:2] + DR_label_2[0:2]
-        SR_label_2 = DR_label_1[2:4] + DR_label_2[2:4]
+        len_DR_label_2 = len(DR_label_1) // 2
+        SR_label_1 = DR_label_1[0:len_DR_label_2] + DR_label_2[0:len_DR_label_2]
+        SR_label_2 = DR_label_1[len_DR_label_2:2*len_DR_label_2] + DR_label_2[len_DR_label_2:2*len_DR_label_2]
         return tensor(final_SR_ops[SR_label_1], final_SR_ops[SR_label_2])
