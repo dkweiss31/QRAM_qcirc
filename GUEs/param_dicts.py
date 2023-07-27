@@ -85,7 +85,7 @@ param_dict_2 = {
 cav_idx_dict_two_way = {"a1_idx": 0, "a2_idx": 1, "b1_idx": 2, "b2_idx": 3, "c1_idx": 4, "c2_idx": 5}
 tran_res_idx_dict_two_way = {"a1_r_idx": 6, "a2_r_idx": 7, "b1_r_idx": 8, "b2_r_idx": 9, "c1_r_idx": 10, "c2_r_idx": 11}
 ideal_param_dict_two_way = {
-    "num_exc": 2,
+    "num_exc": 3,
     "gamma_a_avg": 2.0 * np.pi * 0.02,
     "gamma_b_avg": 2.0 * np.pi * 0.02,
     "gamma_c_avg": 2.0 * np.pi * 0.02,
@@ -112,7 +112,7 @@ ideal_param_dict_two_way = {
 }
 
 param_dict_1_two_way = {
-    "num_exc": 2,
+    "num_exc": 3,
     "gamma_a_avg": 2.0 * np.pi * 0.02,
     "gamma_b_avg": 2.0 * np.pi * 0.02,
     "gamma_c_avg": 2.0 * np.pi * 0.02,
@@ -142,7 +142,7 @@ T1_res = 25000 * 10**3
 T2_res = 34000 * 10**3
 Tphi_res = ((1 / T2_res) - (1 / (2 * T1_res))) ** (-1)
 param_dict_2_two_way = {
-    "num_exc": 2,
+    "num_exc": 3,
     "gamma_a_avg": 2.0 * np.pi * 0.02,
     "gamma_b_avg": 2.0 * np.pi * 0.02,
     "gamma_c_avg": 2.0 * np.pi * 0.02,
