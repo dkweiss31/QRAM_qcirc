@@ -6,7 +6,7 @@ NUM_PTS=9
 BASE=2.15
 PREFACTOR=100
 NTH=0.0
-NUM_CPUS=4
+NUM_CPUS=16
 SBATCH_SCRIPT="_submit_transfer_Tphi.sh"
 ######
 
