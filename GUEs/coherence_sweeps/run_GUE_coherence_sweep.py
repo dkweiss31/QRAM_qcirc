@@ -9,7 +9,7 @@ from GUEs.param_dicts import ideal_param_dict_two_way
 
 
 def run_GUE_coherence(param_key, idx, num_pts, base, prefactor, nth, num_cpus=8):
-    T_list = np.array([base ** i for i in range(0, num_pts)]) * prefactor
+    T_list = np.array([base ** i for i in range(0, num_pts+1)]) * prefactor
     ideal_param_dict_two_way["nth"] = nth
     ideal_param_dict_two_way["num_cpus"] = num_cpus
     filepath = f"out/fidel_GUE_coherence_{param_key}_{str(idx).zfill(5)}.h5py"

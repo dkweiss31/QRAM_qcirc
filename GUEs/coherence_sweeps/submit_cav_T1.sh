@@ -14,7 +14,7 @@ cat > $SBATCH_SCRIPT <<EOL
 #!/bin/bash
 #SBATCH --partition=day
 #SBATCH --job-name=coherence_sweep_cav_T1
-#SBATCH -o out/output-%a.txt -e out/errors-%a.txt
+#SBATCH -o out/output-$PARAM_KEY-%a.txt -e out/errors-$PARAM_KEY-%a.txt
 #SBATCH --array=0-$NUM_PTS
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
