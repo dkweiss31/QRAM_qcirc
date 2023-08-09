@@ -1,16 +1,8 @@
 #!/bin/bash
 
-### this script is for running array jobs over different
-### gamma deviations. we want to dynamically allocate the number
-### of cpus, and want to set the number of array jobs
-### equal to the number of points we want to loop over
-### we do this by creating a temp script as done below.
-### the escapes on \${ARRAY_IDX_LIST[\${SLURM_ARRAY_TASK_ID}]}
-### are so that these remain unevaluated
-
 ###### modify params here
 NUM_PTS=401
-NUM_ARRAY=$((NUM_PTS * NUM_PTS))
+NUM_ARRAY=$NUM_PTS
 NUM_IDXS=$((NUM_ARRAY-1))
 NUM_CPUS=1
 EPS=0.005
