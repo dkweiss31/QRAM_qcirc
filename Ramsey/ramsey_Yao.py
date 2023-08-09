@@ -1,6 +1,7 @@
 import copy
 import warnings
 
+import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 from qutip import (
@@ -247,6 +248,9 @@ class RamseyExperiment:
         gamma_phi_indep, popt, pcov = self.extract_gammaphi(
             ramsey_result, p0=p0
         )
+        # write this separately in case the fit fails
+        with h5py.File(filepath, "w") as f:
+            written_data = f.create_dataset("gamma_phi", data=gamma_phi_indep)
         print(f"naive gamma_phi = {naive_gamma_phi}")
         print(f"indep gamma_phi = {gamma_phi_indep}")
 

@@ -9,11 +9,13 @@
 ### are so that these remain unevaluated
 
 ###### modify params here
-NUM_PTS=41
+NUM_PTS=401
 NUM_ARRAY=$((NUM_PTS * NUM_PTS))
 NUM_IDXS=$((NUM_ARRAY-1))
 NUM_CPUS=1
 EPS=0.005
+CAV_DIM=10
+NSTEPS=200000
 ######
 
 SBATCH_SCRIPT="tmp_slurm_script.sh"
@@ -36,7 +38,7 @@ ARRAY_IDX_LIST=($(seq 0 1 $NUM_IDXS))
 
 module load miniconda
 conda activate qram_fidelity
-python run_Ramsey_coherent.py --idx=\${ARRAY_IDX_LIST[\${SLURM_ARRAY_TASK_ID}]} --num_pts=$NUM_PTS --eps=$EPS
+python run_Ramsey_coherent.py --idx=\${ARRAY_IDX_LIST[\${SLURM_ARRAY_TASK_ID}]} --num_pts=$NUM_PTS --eps=$EPS --cav_dim=$CAV_DIM --nsteps=$NSTEPS
 EOL
 
 chmod +x $SBATCH_SCRIPT

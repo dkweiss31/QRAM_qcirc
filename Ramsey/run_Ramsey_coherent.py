@@ -5,15 +5,17 @@ sys.path.append("/gpfs/gibbs/project/puri/dkw34/qram_fidelity/QRAM_qcirc/")
 sys.path.append("/Users/danielweiss/PycharmProjects/QRAM_qcirc")
 import numpy as np
 from Ramsey.ramsey_Yao import CoherentDephasing
-from param_dicts import param_dict_1
+from Ramsey.param_dicts import param_dict_1
 
 
-def run_coherent(idx, num_pts, eps):
+def run_coherent(idx, num_pts, eps, cav_dim, nsteps=200000):
     omega_d_list = np.linspace(2.0, 4.5, num_pts)
     omega_d_cav = omega_d_list[idx]
     epsilon_array = 2.0 * np.pi * np.array([eps, ])
     param_dict_1["omega_d_cav"] = omega_d_cav
     param_dict_1["epsilon_array"] = epsilon_array
+    param_dict_1["cavity_dim"] = cav_dim
+    param_dict_1["nsteps"] = nsteps
     ramsey_experiment_one_cohere = CoherentDephasing(**param_dict_1)
     filepath = (f"out/{str(idx).zfill(5)}_numcav_{param_dict_1['num_cavs']}"
                 + f"_cavdim_{param_dict_1['cavity_dim']}_eps_{eps}_cohere_Ramsey.h5py")
@@ -28,5 +30,7 @@ if __name__ == "__main__":
         "--num_pts", default=5, type=int, help="number of points in param list"
     )
     parser.add_argument("--eps", default=0.0, type=float, help="drive strength in GHz")
+    parser.add_argument("--cav_dim", default=6, type=int, help="cavity dimension")
+    parser.add_argument("--nsteps", default=200000, type=int, help="nsteps for mesolve")
     args = parser.parse_args()
-    run_coherent(args.idx, args.num_pts, args.eps)
+    run_coherent(args.idx, args.num_pts, args.eps, args.cav_dim, nsteps=args.nsteps)
