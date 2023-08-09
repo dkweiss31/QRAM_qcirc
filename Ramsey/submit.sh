@@ -7,6 +7,7 @@ NUM_IDXS=$((NUM_ARRAY-1))
 NUM_CPUS=1
 EPS=0.005
 CAV_DIM=10
+NUM_CAVS=1
 NSTEPS=200000
 ######
 
@@ -21,7 +22,7 @@ cat > $SBATCH_SCRIPT <<EOL
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=$NUM_CPUS
-#SBATCH --mem-per-cpu=15G
+#SBATCH --mem-per-cpu=10G
 #SBATCH --time=04:00:00
 #SBATCH --mail-type=START,END,FAIL
 #SBATCH --mail-user=daniel.weiss@yale.edu
@@ -30,7 +31,7 @@ ARRAY_IDX_LIST=($(seq 0 1 $NUM_IDXS))
 
 module load miniconda
 conda activate qram_fidelity
-python run_Ramsey_coherent.py --idx=\${ARRAY_IDX_LIST[\${SLURM_ARRAY_TASK_ID}]} --num_pts=$NUM_PTS --eps=$EPS --cav_dim=$CAV_DIM --nsteps=$NSTEPS
+python run_Ramsey_coherent.py --idx=\${ARRAY_IDX_LIST[\${SLURM_ARRAY_TASK_ID}]} --num_pts=$NUM_PTS --eps=$EPS --cav_dim=$CAV_DIM --num_cavs=$NUM_CAVS --nsteps=$NSTEPS
 EOL
 
 chmod +x $SBATCH_SCRIPT
