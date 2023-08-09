@@ -6,7 +6,7 @@ import numpy as np
 sys.path.append("/gpfs/gibbs/project/puri/dkw34/qram_fidelity/QRAM_qcirc/")
 from GUEs.main_GUE_two_way import main_GUE_two_way
 from GUEs.param_dicts import param_dict_2
-from utils.utils import generate_file_path
+from QRAM_utils.utils import generate_file_path
 
 
 def run_gamma_dev(dev_amount, idx, num_pts, num_cpus=8):

@@ -8,9 +8,9 @@ from qutip import (
     Options,
 )
 
-from utils.dual_rail import DualRailMixin
-from utils.quantum_helpers import prop_or_mesolve_factory, SWAP_op
-from utils.utils import id_wrap_ops, construct_basis_states_list
+from QRAM_utils.dual_rail import DualRailMixin
+from QRAM_utils.quantum_helpers import prop_or_mesolve_factory, SWAP_op
+from QRAM_utils.utils import id_wrap_ops, construct_basis_states_list
 
 
 class SimulateBosonicOperations:

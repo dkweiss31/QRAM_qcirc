@@ -2,8 +2,8 @@ import numpy as np
 from qutip import tensor, Qobj
 
 from GUEs.simulate_GUE import SimulateGUETwoWay, SimulateGUETwoWayDR
-from utils.hashing import Hashing
-from utils.utils import write_to_h5
+from QRAM_utils.hashing import Hashing
+from QRAM_utils.utils import write_to_h5
 
 
 def main_GUE_two_way(filepath, param_dict):

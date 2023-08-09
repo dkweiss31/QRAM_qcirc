@@ -9,10 +9,10 @@ from qutip import (
 )
 from scipy.special import erf
 
-from utils.dual_rail import DualRailMixin
-from utils.hashing import Hashing
-from utils.quantum_helpers import operator_basis_lidar, apply_gate_to_states
-from utils.utils import id_wrap_ops
+from QRAM_utils.dual_rail import DualRailMixin
+from QRAM_utils.hashing import Hashing
+from QRAM_utils.quantum_helpers import operator_basis_lidar, apply_gate_to_states
+from QRAM_utils.utils import id_wrap_ops
 
 
 class SimulateGUE:

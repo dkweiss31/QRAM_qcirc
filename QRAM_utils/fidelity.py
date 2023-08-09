@@ -5,8 +5,8 @@ from qutip import (
     vector_to_operator,
 )
 
-from utils.quantum_helpers import operator_basis_lidar
-from utils.utils import project_U
+from QRAM_utils.quantum_helpers import operator_basis_lidar
+from QRAM_utils.utils import project_U
 
 
 class Fidelity:

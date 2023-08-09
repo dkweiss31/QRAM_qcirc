@@ -3,19 +3,19 @@ from functools import partial
 import numpy as np
 from qutip import tensor, destroy, Qobj, to_super
 
-from simulate_bosonic_ops import SimulateBosonicOperations, SimulateBosonicOperationsDR
-from utils.fidelity import Fidelity
-from utils.quantum_helpers import (
+from QRAM_utils.fidelity import Fidelity
+from QRAM_utils.quantum_helpers import (
     apply_gate_to_states,
     operator_basis_lidar,
     operators_from_states,
 )
-from utils.utils import (
+from QRAM_utils.utils import (
     id_wrap_ops,
     construct_basis_states_list,
     project_U,
     write_to_h5,
 )
+from simulate_bosonic_ops import SimulateBosonicOperations, SimulateBosonicOperationsDR
 
 
 def main_SR_DR(filepath, param_dict):

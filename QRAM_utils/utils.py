@@ -1,6 +1,7 @@
 import glob
 import os
 import re
+from typing import List
 
 import h5py
 import numpy as np
@@ -32,8 +33,8 @@ def id_wrap_ops(op: Qobj, idx: int, truncated_dims: list) -> Qobj:
 
 
 def construct_basis_states_list(
-    Fock_states_spec: list[tuple], truncated_dims: list[int]
-) -> list[Qobj]:
+    Fock_states_spec: List[tuple], truncated_dims: List[int]
+) -> List[Qobj]:
     """
     given Fock state specifications, return corresponding kets
     Parameters
@@ -134,7 +135,7 @@ def my_to_chi(q_oper):
     """
     pauli_ops_oneq = [qeye(2) / 2, sigmax() / 2, sigmay() / 2, sigmaz() / 2]
     pauli_ops = [
-        Qobj(tensor(pauli_op1, pauli_op2), dims=[[4], [4]])
+        Qobj(tensor(pauli_op1, pauli_op2))
         for pauli_op1 in pauli_ops_oneq
         for pauli_op2 in pauli_ops_oneq
     ]

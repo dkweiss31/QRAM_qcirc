@@ -1,4 +1,5 @@
 import copy
+import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -16,7 +17,7 @@ from qutip import (
 from scipy.constants import hbar, k
 from scipy.optimize import curve_fit
 
-from utils.utils import id_wrap_ops, construct_basis_states_list, write_to_h5
+from QRAM_utils.utils import id_wrap_ops, construct_basis_states_list, write_to_h5
 
 
 class RamseyExperiment:
@@ -171,16 +172,22 @@ class RamseyExperiment:
             c_ops = self.construct_c_ops_interference()
         else:
             c_ops = self.construct_c_ops_no_interference()
+        e_ops = [a.dag() * a for a in self.annihilation_ops()]
         options = Options(
             store_final_state=True, nsteps=self.nsteps, atol=self.atol, rtol=self.rtol
         )
-        return mesolve(
+        result = mesolve(
             H,
             init_dm,
             (0, t),
             c_ops=c_ops,
+            e_ops=e_ops,
             options=options,
-        ).final_state
+        )
+        print(np.max(result.expect))
+        if np.max(result.expect) >= self.cavity_dim - 1:
+            warnings.WarningMessage("likely need to increase cavity_dim")
+        return result.final_state
 
     def readout_proj(self):
         op_list = self.num_cavs * [qeye(self.cavity_dim)] + [
@@ -239,9 +246,6 @@ class RamseyExperiment:
         write_to_h5(filepath, {"ramsey_result": ramsey_result}, self.__dict__)
         gamma_phi_indep, popt, pcov = self.extract_gammaphi(
             ramsey_result, p0=p0
-        )
-        print(
-            f"Ramsey experiment with {self.__dict__}"
         )
         print(f"naive gamma_phi = {naive_gamma_phi}")
         print(f"indep gamma_phi = {gamma_phi_indep}")
@@ -311,17 +315,13 @@ class CoherentDephasing(RamseyExperiment):
 
     def hamiltonian(self):
         H = super().hamiltonian()
-        alpha_array = -self.epsilon_array / (self.omega_cavs - self.omega_d_cav)
-        a_ops = self.annihilation_ops()
-        (sx, sy, sz) = self.tmon_Pauli_ops()
-        for (alpha, a, chi) in zip(alpha_array, a_ops, self.chi_cavstmon):
-            H[0] += -0.5 * chi * np.abs(alpha) ** 2 * sz
+        for (eps, a) in zip(self.epsilon_array, self.annihilation_ops()):
             H.append([
-                0.5 * chi * alpha * a.dag() * sz,
-                lambda t, args: np.exp(1j * self.omega_d_cav * t),
+                eps * a.dag(),
+                lambda t, args: np.exp(-1j * self.omega_d_cav * t),
             ])
             H.append([
-                0.5 * chi * alpha * a * sz,
-                lambda t, args: np.exp(-1j * self.omega_d_cav * t),
+                eps * a,
+                lambda t, args: np.exp(1j * self.omega_d_cav * t),
             ])
         return H

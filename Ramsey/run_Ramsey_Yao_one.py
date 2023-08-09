@@ -1,49 +1,30 @@
 import numpy as np
 
-from ramsey_Yao import RamseyExperiment
+from QRAM_utils.utils import generate_file_path
+from Ramsey.ramsey_Yao import RamseyExperiment, CoherentDephasing
+from param_dicts import param_dict_1
 
-tmon_dim = 2
-cavity_dim = 7
-delay_times = np.linspace(0.0, 2000.0, 301)
-thermal_time = 100
-window = (0, 300)
-omega_a = 2.0 * np.pi * 3.3261  # 3.40 #3.326
-omega_tmon = 2.0 * np.pi * 5.7423  # 5.867
-omega_d = omega_tmon - 2.0 * np.pi * 0.0071
-chiaq = -2.0 * np.pi * 0.000322
-kappa_a = 2.0 * np.pi * 0.04268
-temp = 0.1
-ramsey_experiment_one = RamseyExperiment(
-    omega_tmon,
-    np.array(
-        [
-            omega_a,
-        ]
-    ),
-    np.array(
-        [
-            chiaq,
-        ]
-    ),
-    np.array(
-        [
-            kappa_a,
-        ]
-    ),
-    temp,
-    tmon_dim,
-    cavity_dim,
-    1,
-)
-nth = ramsey_experiment_one.nths()
-thermal_state = ramsey_experiment_one.obtain_thermal_state()
-c_ops = ramsey_experiment_one.construct_c_ops_no_interference()
-ramsey_result = ramsey_experiment_one.ramsey_liouv(
-    thermal_state, delay_times, omega_d, c_ops
-)
-gamma_phi, popt, pcov = ramsey_experiment_one.extract_gammaphi(
-    ramsey_result, delay_times
-)
-naive_gamma_phi = ramsey_experiment_one.gamma_phi_full_func(chiaq, nth, kappa_a)
-print(f"naive gamma_phi = {naive_gamma_phi}")
-print(f"real gamma_phi = {gamma_phi}")
+run_coherent = True
+run_thermal = True
+directory = "Ramsey/out"
+param_dict_1["cavity_dim"] = 10
+param_dict_1["nsteps"] = 200000
+if run_thermal:
+    filepath = generate_file_path(
+        "hdf5", f"Ramsey_onecav_dim_{param_dict_1['cavity_dim']}", directory
+    )
+    p0 = (6 * 10 ** 4, 0.045, 0.5, 0.2, -1)
+    ramsey_experiment_two = RamseyExperiment(**param_dict_1)
+    ramsey_experiment_two.main_ramsey(filepath, p0)
+
+if run_coherent:
+    omega_d_cav = 2.0 * np.pi * 3.35
+    epsilon_array = 2.0 * np.pi * np.array([0.005, ])
+    param_dict_1["omega_d_cav"] = omega_d_cav
+    param_dict_1["epsilon_array"] = epsilon_array
+    ramsey_experiment_two_cohere = CoherentDephasing(**param_dict_1)
+    filepath = generate_file_path(
+        "hdf5", f"coherent_onecav_dim_{param_dict_1['cavity_dim']}", directory
+    )
+    p0 = (6 * 10 ** 4, 0.045, 0.5, 0.2, -1)
+    ramsey_experiment_two_cohere.main_ramsey(filepath, p0)

@@ -10,7 +10,7 @@ from qutip import (
     tensor,
 )
 
-from utils.utils import get_map, construct_basis_states_list
+from QRAM_utils.utils import get_map, construct_basis_states_list
 
 
 def _propagator(H: Qobj, t: float, c_ops: Optional[List[Qobj]] = None) -> Qobj:

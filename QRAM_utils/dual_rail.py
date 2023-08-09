@@ -1,7 +1,7 @@
 import numpy as np
 from qutip import tensor, Qobj
 
-from utils.quantum_helpers import operator_basis_lidar, operators_from_states
+from QRAM_utils.quantum_helpers import operator_basis_lidar, operators_from_states
 
 
 class DualRailMixin:

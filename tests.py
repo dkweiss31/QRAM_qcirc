@@ -11,15 +11,15 @@ from qutip import (
     to_super,
 )
 
-from bosonic.simulate_bosonic_ops import SimulateBosonicOperations, SimulateBosonicOperationsDR
-from utils.quantum_helpers import (
+from QRAM_utils.quantum_helpers import (
     apply_gate_to_states,
     Fock_prods,
     SWAP_op,
     operators_from_states,
     operator_basis_lidar,
 )
-from utils.utils import id_wrap_ops, project_U, construct_basis_states_list
+from QRAM_utils.utils import id_wrap_ops, project_U, construct_basis_states_list
+from bosonic.simulate_bosonic_ops import SimulateBosonicOperations, SimulateBosonicOperationsDR
 
 param_dict = {
     "tmon_dim": 3,

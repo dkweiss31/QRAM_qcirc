@@ -1,6 +1,6 @@
 import numpy as np
 
-from utils.hashing import Hashing
+from QRAM_utils.hashing import Hashing
 
 
 class TestHashing:

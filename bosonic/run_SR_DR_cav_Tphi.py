@@ -1,8 +1,8 @@
 import numpy as np
 
+from QRAM_utils.utils import generate_file_path
 from main_SR_DR import main_SR_DR
 from param_dicts import ideal_param_dict
-from utils.utils import generate_file_path
 
 Tphi_list = np.array([2.6 ** i for i in range(0, 10)]) * 2 * 10**4
 
