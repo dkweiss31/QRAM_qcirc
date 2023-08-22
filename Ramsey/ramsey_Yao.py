@@ -322,19 +322,7 @@ class CoherentDephasing(RamseyExperiment):
 
     def hamiltonian(self):
         H = super().hamiltonian()
-        # test for single cavity
-        a = self.annihilation_ops()[0]
-        eps = self.epsilon_array[0]
-        H[0] += -self.omega_d_cav * a.dag() * a
-        H[0] += eps * a + np.conj(eps) * a.dag()
+        for (eps, a) in zip(self.epsilon_array, self.annihilation_ops()):
+            H[0] += -self.omega_d_cav * a.dag() * a
+            H[0] += eps * a + np.conj(eps) * a.dag()
         return H
-        # for (eps, a) in zip(self.epsilon_array, self.annihilation_ops()):
-        #     H.append([
-        #         eps * a.dag(),
-        #         lambda t, args: np.exp(-1j * self.omega_d_cav * t),
-        #     ])
-        #     H.append([
-        #         eps * a,
-        #         lambda t, args: np.exp(1j * self.omega_d_cav * t),
-        #     ])
-        # return H
