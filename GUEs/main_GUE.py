@@ -8,7 +8,7 @@ from GUEs.simulate_GUE import (
     SimulateGUEHashingDR,
 )
 from QRAM_utils.hashing import Hashing
-from QRAM_utils.utils import construct_basis_states_list, write_to_h5
+from QRAM_utils.utils import write_to_h5
 
 
 def main_GUE(filepath, param_dict):
@@ -17,10 +17,6 @@ def main_GUE(filepath, param_dict):
     if hashing:
         guefidelity = SimulateGUEHashing(**param_dict)
         guefidelity_DR = SimulateGUEHashingDR(**param_dict)
-        hashing_hilbert_dim = guefidelity.hilbert_dim()
-        vac = np.zeros(hashing_hilbert_dim)
-        vac[0] = 1.0
-        state_0000 = Qobj(vac)
         new_hash = Hashing(number_degrees_freedom=2, num_exc=param_dict["num_exc"])
         red_hilbert_dim = new_hash.hilbert_dim()
         vac = np.zeros(red_hilbert_dim)
@@ -33,11 +29,11 @@ def main_GUE(filepath, param_dict):
         cavity_dim = param_dict["cavity_dim"]
         guefidelity = SimulateGUE(**param_dict)
         guefidelity_DR = SimulateGUEDR(**param_dict)
-        (state_0000,) = construct_basis_states_list([(0, 0, 0, 0, 0, 0, 0, 0), ], guefidelity.truncated_dims)
         red_zero_state = tensor(*[basis(dim, 0) for dim in [cavity_dim, cavity_dim]])
         c1_idx = guefidelity_DR.c1_idx
         c2_idx = guefidelity_DR.c2_idx
         red_right_state = guefidelity.rightward_state(c1_idx, c2_idx)
+    state_0000 = guefidelity.vacuum_state()
     state_1000 = guefidelity.b1.dag() * state_0000
     state_0100 = guefidelity.b2.dag() * state_0000
     state_0010 = guefidelity.c1.dag() * state_0000

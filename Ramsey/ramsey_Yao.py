@@ -33,6 +33,7 @@ class RamseyExperiment:
         tmon_dim=2,
         cavity_dim=4,
         num_cavs=1,
+        thermal_time=200.0,
         delay_times=np.linspace(0.0, 2000, 301),
         omega_d_tmon=2.0 * np.pi * (5.7423 - 0.0071),
         tmon_drive_amp: float = 2.0 * np.pi * 0.01,
@@ -50,6 +51,7 @@ class RamseyExperiment:
         self.tmon_dim = tmon_dim
         self.cavity_dim = cavity_dim
         self.num_cavs = num_cavs
+        self.thermal_time = thermal_time
         self.delay_times = delay_times
         self.omega_d_tmon = omega_d_tmon
         self.tmon_drive_amp = tmon_drive_amp
@@ -119,8 +121,8 @@ class RamseyExperiment:
         ]
         return individual_lowering + individual_raising
 
-    def obtain_thermal_state(self, total_time: float = 200, initial_state=None):
-        if total_time < 2.0 / np.min(self.kappa_cavs):
+    def obtain_thermal_state(self, initial_state=None):
+        if self.thermal_time < 2.0 / np.min(self.kappa_cavs):
             print("running for too short of a time to get a thermal state")
         if initial_state is None:
             fock_spec = tuple(len(self.truncated_dims) * [0])
@@ -132,7 +134,7 @@ class RamseyExperiment:
             )
         H = self.hamiltonian()
         return self.mesolve_for_final_state(
-            H, initial_state * initial_state.dag(), total_time
+            H, initial_state * initial_state.dag(), self.thermal_time
         )
 
     @staticmethod
@@ -214,8 +216,7 @@ class RamseyExperiment:
         final_state = self.mesolve_for_final_state(
             H_with_drive, state_after_prev_delay, t_pi2
         )
-        readout_proj = self.readout_proj()
-        final_prob[0] = np.real(np.trace(final_state * readout_proj))
+        final_prob[0] = np.real(np.trace(final_state * self.readout_proj()))
         delay_dif = self.delay_times[1] - self.delay_times[0]
         for idx in range(1, len(self.delay_times)):
             # run the delay
@@ -288,6 +289,7 @@ class CoherentDephasing(RamseyExperiment):
         tmon_dim=2,
         cavity_dim=4,
         num_cavs=1,
+        thermal_time=200.0,
         delay_times=np.linspace(0.0, 2000, 301),
         omega_d_tmon=2.0 * np.pi * (5.7423 - 0.0071),
         tmon_drive_amp: float = 2.0 * np.pi * 0.01,
@@ -307,6 +309,7 @@ class CoherentDephasing(RamseyExperiment):
             tmon_dim,
             cavity_dim,
             num_cavs,
+            thermal_time,
             delay_times,
             omega_d_tmon,
             tmon_drive_amp,

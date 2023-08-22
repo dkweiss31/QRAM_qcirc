@@ -172,6 +172,38 @@ def write_to_h5(filepath, data_dict, param_dict, loud=True):
                 f.attrs[kwarg] = str(param_dict[kwarg])
 
 
+def extract_data_for_plotting(num_range: range, filefrag: str, param_key: str, data_key: str, abs_path="../out/"):
+    """
+    Parameters
+    ----------
+    num_range: range
+        range of numbers corresponding to files to extract data over
+    filefrag: str
+        rest of the data file str
+    param_key: str
+        key of the parameter to sweep over
+    data_key: str
+        key of the data that is a function of the swept parameter
+    abs_path: str
+        path to the file from where this function is called from
+
+    Returns
+    -------
+    ndarrays of (swept param, data)
+
+    """
+    data_list = []
+    sweep_param_list = []
+    for num in num_range:
+        file_name = abs_path+str(num).zfill(5)+filefrag+".h5py"
+        data_dict, param_dict = extract_info_from_h5(file_name)
+        data_list.append(data_dict[data_key])
+        sweep_param_list.append(param_dict[param_key])
+    sweep_param_list = np.array(sweep_param_list)
+    data_list = np.array(data_list)
+    return sweep_param_list, data_list
+
+
 def extract_info_from_h5(filepath):
     data_dict = {}
     read_param_dict = {}

@@ -12,7 +12,7 @@ from scipy.special import erf
 from QRAM_utils.dual_rail import DualRailMixin
 from QRAM_utils.hashing import Hashing
 from QRAM_utils.quantum_helpers import operator_basis_lidar, apply_gate_to_states
-from QRAM_utils.utils import id_wrap_ops
+from QRAM_utils.utils import id_wrap_ops, construct_basis_states_list
 
 
 class SimulateGUE:
@@ -47,6 +47,9 @@ class SimulateGUE:
         atol: float = 1e-10,
         rtol: float = 1e-10,
         num_cpus: int = 8,
+        phi = np.pi,
+        phi_b = 0.0,
+        phi_c = 0.0,
     ):
         self.gamma_b_1 = gamma_b_avg + 0.5 * gamma_b_dev
         self.gamma_b_2 = gamma_b_avg - 0.5 * gamma_b_dev
@@ -77,7 +80,9 @@ class SimulateGUE:
         self.atol = atol
         self.rtol = rtol
         self.truncated_dims = 8 * [cavity_dim]
-        self.phi = -np.pi / 2
+        self.phi = phi,
+        self.phi_b = phi_b
+        self.phi_c = phi_c
         self.num_cpus = num_cpus
 
         for label, idx in cav_idx_dict.items():
@@ -153,7 +158,8 @@ class SimulateGUE:
 
     def gamma_b_func(self, t, args=None):
         return (
-            self.scale_b
+            np.exp(1j * self.phi_b)
+            * self.scale_b
             * np.sqrt(self.gamma_b_avg)
             * np.sqrt(
                 (
@@ -169,7 +175,11 @@ class SimulateGUE:
         )
 
     def gamma_c_func(self, t, args=None):
-        return self.scale_c * self.gamma_b_func(-t + 2 * self.t_half, args=args)
+        return (self.scale_c
+                * np.exp(1j * self.phi_c)
+                * np.exp(-1j * self.phi_b)
+                * self.gamma_b_func(-t + 2 * self.t_half, args=args)
+                )
 
     def rightward_state(self, idx_0, idx_1):
         assert idx_1 == idx_0 + 1
@@ -181,15 +191,17 @@ class SimulateGUE:
         ).unit()
         return right_state
 
+    def vacuum_state(self):
+        (state_0000,) = construct_basis_states_list([8 * (0,), ], self.truncated_dims)
+        return state_0000
+
     def hamiltonian(self):
         L_R_b, L_R_c, L_L_b, L_L_c = self.collective_loss_ops()
         H0_r_half = -0.5 * 1j * (L_R_c.dag() * L_R_b + L_L_b.dag() * L_L_c)
         H0_r = H0_r_half + H0_r_half.dag()
-        H_int_b_1 = self.b1 * self.b1_r.dag() + self.b1.dag() * self.b1_r
-        H_int_b_2 = self.b2 * self.b2_r.dag() + self.b2.dag() * self.b2_r
-        H_int_c_1 = self.c1 * self.c1_r.dag() + self.c1.dag() * self.c1_r
-        H_int_c_2 = self.c2 * self.c2_r.dag() + self.c2.dag() * self.c2_r
-        return H0_r, H_int_b_1, H_int_b_2, H_int_c_1, H_int_c_2
+        H_int_b = self.b1 * self.b1_r.dag() + self.b2 * self.b2_r.dag()
+        H_int_c = self.c1 * self.c1_r.dag() + self.c2 * self.c2_r.dag()
+        return H0_r, H_int_b, H_int_c
 
     def run_state_transfer(
         self,
@@ -198,15 +210,25 @@ class SimulateGUE:
         final_state_only=True,
     ) -> Qobj:
         if e_ops is None:
-            e_ops = []
+            L_R_b, L_R_c, L_L_b, L_L_c = self.collective_loss_ops()
+            L_R = L_R_b + L_R_c
+            L_L = L_L_b + L_L_c
+            vac = self.vacuum_state()
+            psi_Rbt = L_R_b.dag() * vac
+            psi_Rct = L_R_c.dag() * vac
+            e_ops = [L_R.dag() * L_R,
+                     L_L.dag() * L_L,
+                     psi_Rbt * psi_Rbt.dag(),
+                     psi_Rct * psi_Rct.dag()
+                     ]
         tlist = np.linspace(0.0, 2 * self.t_half, 800)
-        H0_r, H_int_b_1, H_int_b_2, H_int_c_1, H_int_c_2 = self.hamiltonian()
+        H0_r, H_int_b, H_int_c = self.hamiltonian()
         H = [
             H0_r,
-            [H_int_b_1, self.gamma_b_func],
-            [H_int_b_2, self.gamma_b_func],
-            [H_int_c_1, self.gamma_c_func],
-            [H_int_c_2, self.gamma_c_func],
+            [H_int_b, self.gamma_b_func],
+            [H_int_b.dag(), lambda t, a: np.conjugate(self.gamma_b_func(t, a))],
+            [H_int_c, self.gamma_c_func],
+            [H_int_c.dag(), lambda t, a: np.conjugate(self.gamma_c_func(t, a))],
         ]
         options = Options(
             store_final_state=True, atol=self.atol, rtol=self.rtol, nsteps=self.nsteps
@@ -304,7 +326,10 @@ class SimulateGUEHashing(Hashing, SimulateGUE):
             atol: float = 1e-10,
             rtol: float = 1e-10,
             num_cpus: int = 8,  # only included to allow it to be passed to this class
-            num_exc: int = 1
+            num_exc: int = 1,
+            phi=np.pi,
+            phi_b=0.0,
+            phi_c=0.0,
     ):
         Hashing.__init__(self, num_exc=num_exc, number_degrees_freedom=8)
         self.gamma_b_1 = gamma_b_avg + 0.5 * gamma_b_dev
@@ -334,7 +359,9 @@ class SimulateGUEHashing(Hashing, SimulateGUE):
         self.nsteps = nsteps
         self.atol = atol
         self.rtol = rtol
-        self.phi = -np.pi / 2
+        self.phi = phi
+        self.phi_b = phi_b
+        self.phi_c = phi_c
         self.num_exc = num_exc
         self.num_cpus = num_cpus
 
@@ -347,13 +374,18 @@ class SimulateGUEHashing(Hashing, SimulateGUE):
         self.c1_r = self.a_operator(tran_res_idx_dict["c1_r_idx"])
         self.c2_r = self.a_operator(tran_res_idx_dict["c2_r_idx"])
 
+    def vacuum_state(self):
+        vac = np.zeros(self.hilbert_dim())
+        vac[0] = 1.0
+        return Qobj(vac)
+
 
 class SimulateGUEHashingDR(SimulateGUEHashing, DualRailMixin):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
 
-class SimulateGUETwoWay(Hashing, SimulateGUE):
+class SimulateGUETwoWay(SimulateGUEHashing):
     """compute the fidelity of state transfer for GUEs"""
 
     def __init__(
@@ -417,8 +449,8 @@ class SimulateGUETwoWay(Hashing, SimulateGUE):
         self.gamma_a_avg = gamma_a_avg
         self.gamma_a_dev = gamma_a_dev
         self.scale_a = scale_a
-        self.phiab = -np.pi / 2
-        self.phibc = -np.pi / 2
+        self.phiab = 0.0
+        self.phibc = 0.0
         self.num_exc = num_exc
         self.num_cpus = num_cpus
         self.a1 = self.a_operator(cav_idx_dict["a1_idx"])
@@ -538,13 +570,10 @@ class SimulateGUETwoWay(Hashing, SimulateGUE):
             )
         )
         H0_r = H0_r_half + H0_r_half.dag()
-        H_int_a_1 = self.a1 * self.a1_r.dag() + self.a1.dag() * self.a1_r
-        H_int_a_2 = self.a2 * self.a2_r.dag() + self.a2.dag() * self.a2_r
-        H_int_b_1 = self.b1 * self.b1_r.dag() + self.b1.dag() * self.b1_r
-        H_int_b_2 = self.b2 * self.b2_r.dag() + self.b2.dag() * self.b2_r
-        H_int_c_1 = self.c1 * self.c1_r.dag() + self.c1.dag() * self.c1_r
-        H_int_c_2 = self.c2 * self.c2_r.dag() + self.c2.dag() * self.c2_r
-        return H0_r, H_int_a_1, H_int_a_2, H_int_b_1, H_int_b_2, H_int_c_1, H_int_c_2
+        H_int_a = self.a1 * self.a1_r.dag() + self.a2 * self.a2_r.dag()
+        H_int_b = self.b1 * self.b1_r.dag() + self.b2 * self.b2_r.dag()
+        H_int_c = self.c1 * self.c1_r.dag() + self.c2 * self.c2_r.dag()
+        return H0_r, H_int_a, H_int_b, H_int_c,
 
     def run_state_transfer(
         self,
@@ -553,25 +582,25 @@ class SimulateGUETwoWay(Hashing, SimulateGUE):
         final_state_only=True,
     ) -> Qobj:
         if e_ops is None:
-            e_ops = []
+            L_R_a, L_R_b, L_R_c, L_L_a, L_L_b, L_L_c = self.collective_loss_ops()
+            L_R = L_R_a + L_R_b + L_R_c
+            L_L = L_L_a + L_L_b + L_L_c
+            e_ops = [L_R.dag() * L_R, L_L.dag() * L_L]
         tlist = np.linspace(0.0, 2 * self.t_half, 800)
         (
             H0_r,
-            H_int_a_1,
-            H_int_a_2,
-            H_int_b_1,
-            H_int_b_2,
-            H_int_c_1,
-            H_int_c_2,
+            H_int_a,
+            H_int_b,
+            H_int_c,
         ) = self.hamiltonian()
         H = [
             H0_r,
-            [H_int_a_1, self.gamma_a_func],
-            [H_int_a_2, self.gamma_a_func],
-            [H_int_b_1, self.gamma_b_func],
-            [H_int_b_2, self.gamma_b_func],
-            [H_int_c_1, self.gamma_c_func],
-            [H_int_c_2, self.gamma_c_func],
+            [H_int_a, self.gamma_a_func],
+            [H_int_a.dag(), lambda t, a: np.conj(self.gamma_a_func(t, a))],
+            [H_int_b, self.gamma_b_func],
+            [H_int_b.dag(), self.gamma_b_func],
+            [H_int_c, self.gamma_c_func],
+            [H_int_c.dag(), self.gamma_c_func],
         ]
         options = Options(
             store_final_state=True, atol=self.atol, rtol=self.rtol, nsteps=self.nsteps

@@ -8,7 +8,7 @@ from Ramsey.ramsey_Yao import CoherentDephasing
 from Ramsey.param_dicts import param_dict_1, param_dict_2
 
 
-def run_coherent(idx, num_pts, eps, cav_dim, num_cavs=1, nsteps=200000):
+def run_coherent(idx, num_pts, eps, cav_dim, num_cavs=1, nsteps=200000, thermal_time=200.0):
     omega_d_list = 2.0 * np.pi * np.linspace(2.0, 4.5, num_pts)
     omega_d_cav = omega_d_list[idx]
     if num_cavs == 1:
@@ -23,6 +23,7 @@ def run_coherent(idx, num_pts, eps, cav_dim, num_cavs=1, nsteps=200000):
     param_dict["epsilon_array"] = epsilon_array
     param_dict["cavity_dim"] = cav_dim
     param_dict["nsteps"] = nsteps
+    param_dict["thermal_time"] = thermal_time
     ramsey_coherent = CoherentDephasing(**param_dict)
     filepath = (f"out/{str(idx).zfill(5)}_numcav_{param_dict['num_cavs']}"
                 + f"_cavdim_{param_dict['cavity_dim']}_eps_{eps}_cohere_Ramsey.h5py")
@@ -40,5 +41,14 @@ if __name__ == "__main__":
     parser.add_argument("--cav_dim", default=6, type=int, help="cavity dimension")
     parser.add_argument("--num_cavs", default=1, type=int, help="number of cavities")
     parser.add_argument("--nsteps", default=200000, type=int, help="nsteps for mesolve")
+    parser.add_argument("--thermal_time", default=200.0, type=float, help="time spent thermalizing")
     args = parser.parse_args()
-    run_coherent(args.idx, args.num_pts, args.eps, args.cav_dim, nsteps=args.nsteps)
+    run_coherent(
+        args.idx,
+        args.num_pts,
+        args.eps,
+        args.cav_dim,
+        num_cavs=args.num_cavs,
+        nsteps=args.nsteps,
+        thermal_time=args.thermal_time,
+    )
