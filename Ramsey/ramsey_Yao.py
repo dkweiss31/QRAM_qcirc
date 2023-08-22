@@ -326,7 +326,7 @@ class CoherentDephasing(RamseyExperiment):
         a = self.annihilation_ops()[0]
         eps = self.epsilon_array[0]
         H[0] += -self.omega_d_cav * a.dag() * a
-        H.append(eps * a + np.conj(eps) * a.dag())
+        H[0] += eps * a + np.conj(eps) * a.dag()
         return H
         # for (eps, a) in zip(self.epsilon_array, self.annihilation_ops()):
         #     H.append([
