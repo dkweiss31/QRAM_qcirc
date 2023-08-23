@@ -9,7 +9,7 @@ from Ramsey.param_dicts import param_dict_1, param_dict_2
 
 
 def run_coherent(idx, num_pts, eps, cav_dim, num_cavs=1, nsteps=200000, thermal_time=200.0):
-    omega_d_list = 2.0 * np.pi * np.linspace(2.0, 4.5, num_pts)
+    omega_d_list = 2.0 * np.pi * np.linspace(3.0, 3.7, num_pts)
     omega_d_cav = omega_d_list[idx]
     if num_cavs == 1:
         param_dict = param_dict_1

@@ -28,7 +28,6 @@ ideal_param_dict = {
     "nsteps": 3000,
     "atol": 1e-12,
     "rtol": 1e-12,
-    "hashing": True,
 }
 
 param_dict_1 = {
@@ -53,7 +52,6 @@ param_dict_1 = {
     "nsteps": 3000,
     "atol": 1e-12,
     "rtol": 1e-12,
-    "hashing": True,
 }
 
 T1_res = 25000 * 10**3
@@ -81,7 +79,6 @@ param_dict_2 = {
     "nsteps": 3000,
     "atol": 1e-12,
     "rtol": 1e-12,
-    "hashing": True,
 }
 
 # two way

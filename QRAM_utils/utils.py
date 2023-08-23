@@ -172,6 +172,22 @@ def write_to_h5(filepath, data_dict, param_dict, loud=True):
                 f.attrs[kwarg] = str(param_dict[kwarg])
 
 
+def extract_controls_QOGS(filename):
+    with h5py.File(filename, 'r') as f:
+        key = list(f.keys())[len(list(f.keys())) - 1]
+        pulse_obj = f[key]
+        fids = pulse_obj['fidelities']
+        pulse_idx = np.argmax(np.amax(fids, axis=0))
+        controls = []
+        for k in range(2):
+            controls.append(pulse_obj['I' + str(k)][-1, pulse_idx, :])
+            controls.append(pulse_obj['Q' + str(k)][-1, pulse_idx, :])
+        dt = pulse_obj.attrs["DAC_delta_t"]
+        pulse_len = controls[0].shape[0] * dt
+        times = np.arange(pulse_len, step=dt, dtype=float)
+        return times, controls
+
+
 def extract_data_for_plotting(num_range: range, filefrag: str, param_key: str, data_key: str, abs_path="../out/"):
     """
     Parameters

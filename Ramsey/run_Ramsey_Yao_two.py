@@ -4,9 +4,14 @@ from QRAM_utils.utils import generate_file_path
 from Ramsey.ramsey_Yao import RamseyExperiment, CoherentDephasing
 from param_dicts import param_dict_2
 
-run_coherent = True
+run_coherent = False
 run_thermal = True
 directory = "Ramsey/out"
+param_dict_2["cavity_dim"] = 9
+omega_a = 2.0 * np.pi * 3.35  # 3.3261
+omega_b = 2.0 * np.pi * 3.44  # 3.4712
+omega_cavs = np.array([omega_a, omega_b])
+param_dict_2["omega_cavs"] = omega_cavs
 if run_thermal:
     filepath = generate_file_path(
         "hdf5", f"Ramsey_cav_{param_dict_2['cavity_dim']}_interfer_{param_dict_2['interference']}", directory
