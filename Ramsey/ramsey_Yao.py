@@ -326,3 +326,15 @@ class CoherentDephasing(RamseyExperiment):
             H[0] += -self.omega_d_cav * a.dag() * a
             H[0] += eps * a + np.conj(eps) * a.dag()
         return H
+
+
+class CoherentDephasingCounterRotating(CoherentDephasing):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def hamiltonian(self):
+        H = super().hamiltonian()
+        for (eps, a) in zip(self.epsilon_array, self.annihilation_ops()):
+            H += [[eps * a, lambda t, args: np.exp(-2 * 1j * self.omega_d_cav * t)], ]
+            H += [[np.conj(eps) * a.dag(), lambda t, args: np.exp(2 * 1j * self.omega_d_cav * t)], ]
+        return H
