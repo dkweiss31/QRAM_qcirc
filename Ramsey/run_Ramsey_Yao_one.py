@@ -1,11 +1,11 @@
 import numpy as np
 
 from QRAM_utils.utils import generate_file_path
-from Ramsey.ramsey_Yao import RamseyExperiment, CoherentDephasing
+from Ramsey.ramsey_Yao import RamseyExperiment, CoherentDephasingCounterRotating
 from param_dicts import param_dict_1
 
 run_coherent = True
-run_thermal = True
+run_thermal = False
 directory = "Ramsey/out"
 param_dict_1["cavity_dim"] = 10
 param_dict_1["nsteps"] = 200000
@@ -22,7 +22,7 @@ if run_coherent:
     epsilon_array = 2.0 * np.pi * np.array([0.005, ])
     param_dict_1["omega_d_cav"] = omega_d_cav
     param_dict_1["epsilon_array"] = epsilon_array
-    ramsey_experiment_two_cohere = CoherentDephasing(**param_dict_1)
+    ramsey_experiment_two_cohere = CoherentDephasingCounterRotating(**param_dict_1)
     filepath = generate_file_path(
         "hdf5", f"coherent_onecav_dim_{param_dict_1['cavity_dim']}", directory
     )
