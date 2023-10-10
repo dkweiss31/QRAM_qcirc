@@ -50,7 +50,8 @@ class SimulateGUE:
         atol: float = 1e-10,
         rtol: float = 1e-10,
         num_cpus: int = 8,
-        phi=-np.pi/2,
+        phi=-np.pi/2,  # np.pi/2 for op control, -np.pi / 2 for analytic
+        number_degrees_freedom: int = 8,
     ):
         self.gamma_b_1 = gamma_b_avg + 0.5 * gamma_b_dev
         self.gamma_b_2 = gamma_b_avg - 0.5 * gamma_b_dev
@@ -80,8 +81,9 @@ class SimulateGUE:
         self.nsteps = nsteps
         self.atol = atol
         self.rtol = rtol
-        self.truncated_dims = 8 * [cavity_dim]
         self.phi = phi
+        self.number_degrees_freedom = number_degrees_freedom
+        self.truncated_dims = self.number_degrees_freedom * [cavity_dim]
         self.num_cpus = num_cpus
         self.options = Options(
             store_final_state=True, atol=self.atol, rtol=self.rtol, nsteps=self.nsteps
@@ -188,7 +190,9 @@ class SimulateGUE:
         return tensor(*[basis(dim, 0) for dim in [self.cavity_dim, self.cavity_dim]])
 
     def vacuum_state(self):
-        (state_0000,) = construct_basis_states_list([8 * (0,), ], self.truncated_dims)
+        (state_0000,) = construct_basis_states_list(
+            [self.number_degrees_freedom * (0,), ], self.truncated_dims
+        )
         return state_0000
 
     def hamiltonian(self):
@@ -303,7 +307,8 @@ class SimulateGUEHashing(Hashing, SimulateGUE):
     ):
         Hashing.__init__(self, num_exc=num_exc, number_degrees_freedom=number_degrees_freedom)
         SimulateGUE.__init__(self, gamma_b_avg, gamma_c_avg, gamma_b_dev, gamma_c_dev,
-                             cav_idx_dict, tran_res_idx_dict, cavity_dim=1, **kwargs)
+                             cav_idx_dict, tran_res_idx_dict, cavity_dim=1,
+                             number_degrees_freedom=number_degrees_freedom, **kwargs)
         self.b1 = self.a_operator(cav_idx_dict["b1_idx"])
         self.b2 = self.a_operator(cav_idx_dict["b2_idx"])
         self.c1 = self.a_operator(cav_idx_dict["c1_idx"])
@@ -339,7 +344,7 @@ class SimulateGUEHashing(Hashing, SimulateGUE):
 
 class SimulateGUEHashingOptControl(SimulateGUEHashing):
     def __init__(self, gamma_b_avg: float, gamma_c_avg: float, gamma_b_dev: float, gamma_c_dev: float,
-                 cav_idx_dict: dict, tran_res_idx_dict: dict, control_file_location: str, **kwargs):
+                 cav_idx_dict: dict, tran_res_idx_dict: dict, control_file_location: str = " ", **kwargs):
         super().__init__(gamma_b_avg, gamma_c_avg, gamma_b_dev, gamma_c_dev,
                          cav_idx_dict, tran_res_idx_dict, **kwargs)
         self.control_file_location = control_file_location
@@ -347,8 +352,8 @@ class SimulateGUEHashingOptControl(SimulateGUEHashing):
     def _setup_H_for_mesolve(self):
         tlist, controls = extract_controls_QOGS(self.control_file_location)
         if tlist[-1] != 2 * self.t_half:
-            warnings.WarningMessage("Supplied pulse time does not match that extracted from"
-                                    "optimal control. Proceeding with optimal control pulse time.")
+            warnings.warn(f"Supplied pulse time {2*self.t_half} does not match that extracted from"
+                          f"optimal control {tlist[-1]}. Proceeding with optimal control pulse time.")
         H0_r, H_int_b, H_int_c = self.hamiltonian()
         H = [
             H0_r,
@@ -532,11 +537,26 @@ class SimulateGUETwoWay(SimulateGUEHashing):
         ]
         return tlist, H
 
+    def _reduced_hash(self):
+        return Hashing(number_degrees_freedom=4, num_exc=self.num_exc)
+
+    def reduced_rightward_state(self):
+        vac = self.reduced_zero_state()
+        red_hash = self._reduced_hash()
+        (red_c1, red_c2) = (red_hash.a_operator(idx) for idx in range(2, 4))
+        return ((red_c1.dag() + 1j * red_c2.dag()) * vac).unit()
+
+    def reduced_leftward_state(self):
+        vac = self.reduced_zero_state()
+        red_hash = self._reduced_hash()
+        (red_a1, red_a2) = (red_hash.a_operator(idx) for idx in range(0, 2))
+        return ((red_a1.dag() - 1j * red_a2.dag()) * vac).unit()
+
 
 class SimulateGUETwoWayOptControl(SimulateGUETwoWay, SimulateGUEHashingOptControl):
     def __init__(self, gamma_a_avg: float, gamma_b_avg: float, gamma_c_avg: float, gamma_a_dev: float,
                  gamma_b_dev: float, gamma_c_dev: float, cav_idx_dict: dict, tran_res_idx_dict: dict,
-                 control_file_location: str, **kwargs):
+                 control_file_location: str = " ", **kwargs):
         SimulateGUETwoWay.__init__(self, gamma_a_avg, gamma_b_avg, gamma_c_avg, gamma_a_dev, gamma_b_dev, gamma_c_dev,
                                    cav_idx_dict, tran_res_idx_dict, **kwargs)
         self.control_file_location = control_file_location
