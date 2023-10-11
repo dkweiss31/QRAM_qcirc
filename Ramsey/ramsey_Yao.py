@@ -40,6 +40,7 @@ class RamseyExperiment:
         nsteps=1000,
         atol=1e-8,
         rtol=1e-6,
+        loss_ratio=0.0,
     ):
         assert len(omega_cavs) == len(chi_cavstmon) == len(kappa_cavs) == num_cavs
         self.interference = interference
@@ -58,6 +59,7 @@ class RamseyExperiment:
         self.nsteps = nsteps
         self.atol = atol
         self.rtol = rtol
+        self.loss_ratio = loss_ratio
         self.truncated_dims = num_cavs * [cavity_dim] + [tmon_dim]
 
     def tmon_Pauli_ops(self):
@@ -92,19 +94,23 @@ class RamseyExperiment:
         ]
 
     def construct_c_ops_interference(self):
-        collective_lowering = sum(
-            np.sqrt(kappa * (1 + nth)) * a_op
-            for (kappa, nth, a_op) in zip(
-                self.kappa_cavs, self.nths(), self.annihilation_ops()
-            )
-        )
-        collective_raising = sum(
-            np.sqrt(kappa * nth) * a_op.dag()
-            for (kappa, nth, a_op) in zip(
-                self.kappa_cavs, self.nths(), self.annihilation_ops()
-            )
-        )
-        return [collective_lowering, collective_raising]
+        a_ops = self.annihilation_ops()
+        if len(a_ops) == 1:
+            return self.construct_c_ops_no_interference()
+        elif len(a_ops) == 2:
+            kappa_cavs = self.kappa_cavs()
+            nths = self.nths()
+            lowering_1 = (1 - self.loss_ratio) * (np.sqrt(kappa_cavs[0] * (1 + nths[0])) * a_ops[0]
+                          + np.sqrt(kappa_cavs[1] * (1 + nths[1])) * a_ops[1])
+            lowering_2 = self.loss_ratio * (np.sqrt(kappa_cavs[0] * (1 + nths[0])) * a_ops[0]
+                          - np.sqrt(kappa_cavs[1] * (1 + nths[1])) * a_ops[1])
+            raising_1 = (1 - self.loss_ratio) * (np.sqrt(kappa_cavs[0] * nths[0]) * a_ops[0].dag()
+                          + np.sqrt(kappa_cavs[1] * nths[1]) * a_ops[1].dag())
+            raising_2 = self.loss_ratio * (np.sqrt(kappa_cavs[0] * nths[0]) * a_ops[0].dag()
+                                           - np.sqrt(kappa_cavs[1] * nths[1]) * a_ops[1].dag())
+            return [lowering_1, lowering_2, raising_1, raising_2]
+        else:
+            raise RuntimeError("more than two cavities not supported")
 
     def construct_c_ops_no_interference(self):
         individual_lowering = [
