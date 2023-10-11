@@ -25,6 +25,7 @@ param_dict_2 = {
     "omega_d_tmon": 2.0 * np.pi * (5.7423 - 0.0071),
     "chi_cavstmon": chi_cavstmon,
     "temp": 0.1,
+    "loss_ratio": 0.0,
 }
 
 param_dict_1 = {
