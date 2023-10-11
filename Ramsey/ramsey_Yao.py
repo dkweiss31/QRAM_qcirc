@@ -304,6 +304,7 @@ class CoherentDephasing(RamseyExperiment):
         nsteps=1000,
         atol=1e-8,
         rtol=1e-6,
+        loss_ratio=0.0,
     ):
         super().__init__(
             interference,
@@ -322,6 +323,7 @@ class CoherentDephasing(RamseyExperiment):
             nsteps,
             atol,
             rtol,
+            loss_ratio=loss_ratio
         )
         self.omega_d_cav = omega_d_cav
         self.epsilon_array = epsilon_array
