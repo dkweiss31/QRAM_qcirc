@@ -98,7 +98,7 @@ class RamseyExperiment:
         if len(a_ops) == 1:
             return self.construct_c_ops_no_interference()
         elif len(a_ops) == 2:
-            kappa_cavs = self.kappa_cavs()
+            kappa_cavs = self.kappa_cavs
             nths = self.nths()
             lowering_1 = (1 - self.loss_ratio) * (np.sqrt(kappa_cavs[0] * (1 + nths[0])) * a_ops[0]
                           + np.sqrt(kappa_cavs[1] * (1 + nths[1])) * a_ops[1])

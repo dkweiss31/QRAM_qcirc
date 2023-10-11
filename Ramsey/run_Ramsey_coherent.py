@@ -39,7 +39,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--eps", default=0.0, type=float, help="drive strength in GHz")
     parser.add_argument("--cav_dim", default=6, type=int, help="cavity dimension")
-    parser.add_argument("--num_cavs", default=1, type=int, help="number of cavities")
+    parser.add_argument("--num_cavs", default=2, type=int, help="number of cavities")
     parser.add_argument("--nsteps", default=200000, type=int, help="nsteps for mesolve")
     parser.add_argument("--thermal_time", default=200.0, type=float, help="time spent thermalizing")
     args = parser.parse_args()
