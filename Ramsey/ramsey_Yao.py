@@ -330,9 +330,18 @@ class CoherentDephasing(RamseyExperiment):
 
     def hamiltonian(self):
         H = super().hamiltonian()
-        for (eps, a) in zip(self.epsilon_array, self.annihilation_ops()):
+        a_ops = self.annihilation_ops()
+        (sx, sy, sz) = self.tmon_Pauli_ops()
+        for (eps, a) in zip(self.epsilon_array, a_ops):
             H[0] += -self.omega_d_cav * a.dag() * a
             H[0] += eps * a + np.conj(eps) * a.dag()
+        # Also include counter-rotating terms Yao mentioned?
+        if len(a_ops) == 2:
+            chi_mean = np.average(self.chi_cavstmon)
+            counter_op = sz * a_ops[0].dag() * a_ops[1]
+            omega_diff = self.omega_cavs[0] - self.omega_cavs[1]
+            H += [[chi_mean * counter_op, lambda t, args: np.exp(1j * omega_diff * t)], ]
+            H += [[chi_mean * counter_op.dag(), lambda t, args: np.exp(-1j * omega_diff * t)], ]
         return H
 
 
