@@ -195,7 +195,7 @@ class RamseyExperiment:
         )
         print(np.max(result.expect))
         if np.max(result.expect) >= self.cavity_dim - 1:
-            warnings.warn("likely need to increase cavity_dim")
+            warnings.WarningMessage("likely need to increase cavity_dim")
         return result.final_state
 
     def readout_proj(self):
@@ -272,8 +272,8 @@ class RamseyExperiment:
             window = (0, len(self.delay_times))
         popt_T2, pcov_T2 = curve_fit(
             self.T2_func,
-            self.delay_times[window[0]: window[1]],
-            ramsey_result[window[0]: window[1]],
+            self.delay_times[window[0] : window[1]],
+            ramsey_result[window[0] : window[1]],
             p0=p0,
             maxfev=6000,
             bounds=((100, -2, -2, -2, -np.pi), (10**15, 2, 2, 2, np.pi)),
