@@ -374,6 +374,7 @@ class SimulateGUEHashingDR(SimulateGUEHashing, DualRailMixin):
 
 class SimulateGUETwoWay(SimulateGUEHashing):
     """compute the fidelity of state transfer for GUEs"""
+
     def __init__(
         self,
         gamma_a_avg: float,
@@ -385,13 +386,54 @@ class SimulateGUETwoWay(SimulateGUEHashing):
         cav_idx_dict: dict,
         tran_res_idx_dict: dict,
         scale_a: float = 1.017,
+        scale_b: float = 1.018,
+        scale_c: float = 1.017,
+        t_half: float = 600.0,
+        B: float = 0.006,
+        c: float = 2.8284e-5,
+        Gamma_1_cav: float = 0.0,
+        Gamma_phi_cav: float = 0.0,
+        Gamma_1_transfer_nr: float = 0.0,
+        Gamma_phi_transfer: float = 0.0,
+        nth: float = 0.0,
+        nsteps: int = 2000,
+        atol: float = 1e-10,
+        rtol: float = 1e-10,
+        num_cpus: int = 8,
         num_exc: int = 1,
-        number_degrees_freedom: int = 12,
-        **kwargs,
     ):
-        super().__init__(gamma_b_avg, gamma_c_avg, gamma_b_dev, gamma_c_dev,
-                         cav_idx_dict, tran_res_idx_dict, num_exc=num_exc,
-                         number_degrees_freedom=number_degrees_freedom)
+        Hashing.__init__(self, num_exc=num_exc, number_degrees_freedom=12)
+        self.gamma_b_1 = gamma_b_avg + 0.5 * gamma_b_dev
+        self.gamma_b_2 = gamma_b_avg - 0.5 * gamma_b_dev
+        self.gamma_c_1 = gamma_c_avg + 0.5 * gamma_c_dev
+        self.gamma_c_2 = gamma_c_avg - 0.5 * gamma_c_dev
+        self.gamma_b_avg = gamma_b_avg
+        self.gamma_c_avg = gamma_c_avg
+        self.gamma_b_dev = gamma_b_dev
+        self.gamma_c_dev = gamma_c_dev
+        self.cav_idx_dict = cav_idx_dict
+        self.tran_res_idx_dict = tran_res_idx_dict
+        for label, idx in cav_idx_dict.items():
+            setattr(self, label, idx)
+        for label, idx in tran_res_idx_dict.items():
+            setattr(self, label, idx)
+        self.scale_b = scale_b
+        self.scale_c = scale_c
+        self.t_half = t_half
+        self.B = B
+        self.c = c
+        self.Gamma_1_cav = Gamma_1_cav
+        self.Gamma_phi_cav = Gamma_phi_cav
+        self.Gamma_1_transfer_nr = Gamma_1_transfer_nr
+        self.Gamma_phi_transfer = Gamma_phi_transfer
+        self.nth = nth
+        self.nsteps = nsteps
+        self.atol = atol
+        self.rtol = rtol
+        self.options = Options(
+            store_final_state=True, atol=self.atol, rtol=self.rtol, nsteps=self.nsteps
+        )
+        # new items below
         self.gamma_a_1 = gamma_a_avg + 0.5 * gamma_a_dev
         self.gamma_a_2 = gamma_a_avg - 0.5 * gamma_a_dev
         self.gamma_a_avg = gamma_a_avg
@@ -399,10 +441,20 @@ class SimulateGUETwoWay(SimulateGUEHashing):
         self.scale_a = scale_a
         self.phiab = -np.pi/2
         self.phibc = -np.pi/2
+        self.num_exc = num_exc
+        self.num_cpus = num_cpus
         self.a1 = self.a_operator(cav_idx_dict["a1_idx"])
         self.a2 = self.a_operator(cav_idx_dict["a2_idx"])
+        self.b1 = self.a_operator(cav_idx_dict["b1_idx"])
+        self.b2 = self.a_operator(cav_idx_dict["b2_idx"])
+        self.c1 = self.a_operator(cav_idx_dict["c1_idx"])
+        self.c2 = self.a_operator(cav_idx_dict["c2_idx"])
         self.a1_r = self.a_operator(tran_res_idx_dict["a1_r_idx"])
         self.a2_r = self.a_operator(tran_res_idx_dict["a2_r_idx"])
+        self.b1_r = self.a_operator(tran_res_idx_dict["b1_r_idx"])
+        self.b2_r = self.a_operator(tran_res_idx_dict["b2_r_idx"])
+        self.c1_r = self.a_operator(tran_res_idx_dict["c1_r_idx"])
+        self.c2_r = self.a_operator(tran_res_idx_dict["c2_r_idx"])
 
     def collective_loss_ops(self):
         L_R_a = (
