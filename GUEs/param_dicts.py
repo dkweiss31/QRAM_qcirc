@@ -1,9 +1,9 @@
 import numpy as np
 
 # one way
-B = 0.00525777
-scale_b = 1.01291516
-scale_c = 1.01306359
+B = 0.006
+scale_b = 1.018
+scale_c = 1.017
 cav_idx_dict = {"b1_idx": 0, "b2_idx": 1, "c1_idx": 2, "c2_idx": 3}
 tran_res_idx_dict = {"b1_r_idx": 4, "b2_r_idx": 5, "c1_r_idx": 6, "c2_r_idx": 7}
 ideal_param_dict = {
