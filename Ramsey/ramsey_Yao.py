@@ -340,8 +340,8 @@ class CoherentDephasing(RamseyExperiment):
             chi_mean = np.average(self.chi_cavstmon)
             counter_op = sz * a_ops[0].dag() * a_ops[1]
             omega_diff = self.omega_cavs[0] - self.omega_cavs[1]
-            H += [[chi_mean * counter_op, lambda t, args: np.exp(1j * omega_diff * t)], ]
-            H += [[chi_mean * counter_op.dag(), lambda t, args: np.exp(-1j * omega_diff * t)], ]
+            H += [[0.5 * chi_mean * counter_op, lambda t, args: np.exp(1j * omega_diff * t)], ]
+            H += [[0.5 * chi_mean * counter_op.dag(), lambda t, args: np.exp(-1j * omega_diff * t)], ]
         return H
 
 
