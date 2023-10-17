@@ -1,5 +1,3 @@
-import warnings
-
 import numpy as np
 from qutip import (
     destroy,
@@ -9,22 +7,55 @@ from qutip import (
     basis,
     Qobj,
 )
-from scipy.interpolate import CubicSpline
 from scipy.special import erf
 
 from QRAM_utils.dual_rail import DualRailMixin
 from QRAM_utils.hashing import Hashing
 from QRAM_utils.quantum_helpers import operator_basis_lidar, apply_gate_to_states
-from QRAM_utils.utils import id_wrap_ops, construct_basis_states_list, extract_controls_QOGS
+from QRAM_utils.utils import id_wrap_ops, construct_basis_states_list
 
 
 class SimulateGUE:
     """
+    performs simulations in https://arxiv.org/abs/2310.08288
     compute the fidelity of state transfer for GUEs
     Parameters
     ----------
-    gamma_b_avg, gamma_c_avg, gamma_b_dev: float
-
+    gamma_b_avg, gamma_c_avg, gamma_b_dev, gamma_c_dev: float
+        average decay rates of the GUEs into the waveguide and
+        their asymmetry: gamma_b1/2 = gamma_b_avg \pm 0.5 * gamma_b_dev, etc.
+    cav_idx_dict: dict
+        dictionary of ints corresponding to the indices of the data cavities
+    tran_res_idx_dict: dict
+        dictionary of ints corresponding to the indices of the transfer resonators
+    cavity_dim: int
+        Hilbert-space dimension used for the cavities and transfer res
+    scale_b: float
+        multiplying factor on the drive on GUE b (optimized for state transfer)
+    scale_c: float
+        multiplying factor on the drive on GUE c (optimized for state transfer)
+    t_half: float
+        2 * t_half = time for state transfer protocol
+    xi, zeta: float
+        parameters defining the state-transfer pulse
+    Gamma_1_cav: float
+        T1 of cavities
+    Gamma_phi_cav: float
+        Tphi of cavities
+    Gamma_1_transfer_nr: float
+        non-radiative T1 of transfer resonators
+    Gamma_phi_transfer: float
+        Tphi of transfer resonators
+    nth: float
+        number of thermal photons in all elements
+    nsteps, atol, rtol: int, float, float
+        QuTiP solver parameters
+    num_cpus: int
+        number of cpus used to perform fidelity calculations
+    phi=-np.pi/2
+        phase associated with the distance between GUEs
+    number_degrees_freedom: int
+        how many degrees of freedom we are simulating in total
     """
 
     def __init__(
@@ -39,8 +70,8 @@ class SimulateGUE:
         scale_b: float = 1.018,
         scale_c: float = 1.017,
         t_half: float = 600.0,
-        B: float = 0.006,
-        c: float = 2.8284e-5,
+        xi: float = 0.006,
+        zeta: float = 2.8284e-5,
         Gamma_1_cav: float = 0.0,
         Gamma_phi_cav: float = 0.0,
         Gamma_1_transfer_nr: float = 0.0,
@@ -71,8 +102,8 @@ class SimulateGUE:
         self.scale_b = scale_b
         self.scale_c = scale_c
         self.t_half = t_half
-        self.B = B
-        self.c = c
+        self.xi = xi
+        self.zeta = zeta
         self.Gamma_1_cav = Gamma_1_cav
         self.Gamma_phi_cav = Gamma_phi_cav
         self.Gamma_1_transfer_nr = Gamma_1_transfer_nr
@@ -100,6 +131,7 @@ class SimulateGUE:
         self.c2_r = id_wrap_ops(destroy(self.cavity_dim), tran_res_idx_dict["c2_r_idx"], self.truncated_dims)
 
     def collective_loss_ops(self):
+        """construct the collective loss operators associated with each GUE"""
         L_R_b = (
             np.sqrt(self.gamma_b_1) * self.b1_r
             - 1j * np.sqrt(self.gamma_b_2) * self.b2_r
@@ -127,6 +159,7 @@ class SimulateGUE:
         return L_R_b, L_R_c, L_L_b, L_L_c
 
     def construct_c_ops(self):
+        """construct all collapse operators to be passed to mesolve"""
         L_R_b, L_R_c, L_L_b, L_L_c = self.collective_loss_ops()
         return [
             L_R_b + L_R_c,
@@ -158,28 +191,33 @@ class SimulateGUE:
         ]
 
     def gamma_b_func(self, t, args=None):
+        """state-transfer pulse applied to GUE b to facilitate state transfer to GUE c"""
         return (
             self.scale_b
             * np.sqrt(self.gamma_b_avg)
             * np.sqrt(
                 (
                     0.5
-                    * np.exp(-self.c * (t - self.t_half) ** 2)
+                    * np.exp(-self.zeta * (t - self.t_half) ** 2)
                     / (
-                        (1 / self.B)
-                        - np.sqrt(np.pi / (4 * self.c))
-                        * erf(np.sqrt(self.c) * (t - self.t_half))
+                        (1 / self.xi)
+                        - np.sqrt(np.pi / (4 * self.zeta))
+                        * erf(np.sqrt(self.zeta) * (t - self.t_half))
                     )
                 )
             )
         )
 
     def gamma_c_func(self, t, args=None):
+        """state-transfer pulse applied to GUE c to facilitate state transfer from GUE c"""
         return (self.scale_c
                 * self.gamma_b_func(-t + 2 * self.t_half, args=args)
                 )
 
     def reduced_rightward_state(self):
+        """helper function for performing fidelity calculations: we trace out the
+        initial cavities and the transfer resonators, and all we are left with
+        is the cavity we are performing state transfer towards"""
         right_state = (
             tensor(basis(2, 1), basis(2, 0))
             + 1j * tensor(basis(2, 0), basis(2, 1))
@@ -187,15 +225,19 @@ class SimulateGUE:
         return right_state
 
     def reduced_zero_state(self):
+        """vacuum state associated with e.g. reduced_rightward_state"""
         return tensor(*[basis(dim, 0) for dim in [self.cavity_dim, self.cavity_dim]])
 
     def vacuum_state(self):
+        """vacuum state in the full Hilbert space"""
         (state_0000,) = construct_basis_states_list(
             [self.number_degrees_freedom * (0,), ], self.truncated_dims
         )
         return state_0000
 
     def hamiltonian(self):
+        """the non-Hermitian effective Hamiltonian is H0_r, with drive
+        terms H_int_b + H_int_b.dag(), H_int_c + H_int_c.dag()"""
         L_R_b, L_R_c, L_L_b, L_L_c = self.collective_loss_ops()
         H0_r_half = -0.5 * 1j * (L_R_c.dag() * L_R_b + L_L_b.dag() * L_L_c)
         H0_r = H0_r_half + H0_r_half.dag()
@@ -219,6 +261,18 @@ class SimulateGUE:
         e_ops=None,
         final_state_only=True,
     ) -> Qobj:
+        """
+        run the state-transfer procedure for a given initial state
+        Parameters
+        ----------
+        init_state: Qobj
+            initial state for state transfer
+        e_ops: List
+            operators to be passed to mesolve for calculating expectation values
+        final_state_only: Bool
+            True -> return only the final state
+            False -> return the mesolve result
+        """
         if e_ops is None:
             e_ops = []
         tlist, H = self._setup_H_for_mesolve()
@@ -241,6 +295,25 @@ class SimulateGUE:
         ideal_final_cardinal_states: dict,
         measurement_op: Qobj = None,
     ):
+        """
+        calculate the state-transfer fidelity by averaging over
+        all possible initial cardinal states
+        Parameters
+        ----------
+        real_final_states: dict
+            dictionary of the final states associated with simulating the
+            state-transfer protocol
+        ideal_final_cardinal_states: dict
+            dictionary of the final states of the ideal state-transfer,
+            in the same order as real_final_states
+        measurement_op: Qobj
+            optional, measurement operator used for a projective measurement
+            e.g. onto dual-rail basis states to simulate a parity measurement
+
+        Returns
+        -------
+            state-transfer fidelity, success probability
+        """
         fidel = 0.0
         total_prob = 0.0
         num_states = len(ideal_final_cardinal_states)
@@ -266,7 +339,33 @@ class SimulateGUE:
             for label, final_state in state_dict.items()
         }
 
-    def overall_state_transfer_fidelity(self, initial_basis_states, label_list, ideal_final_basis_states, keep_idxs):
+    def overall_state_transfer_fidelity(
+            self,
+            initial_basis_states: list,
+            label_list: list,
+            ideal_final_basis_states: list,
+            keep_idxs: list
+    ):
+        """
+        given initial basis states, their labels, associated ideal final basis states and indices to keep
+        in the partial trace, calculate the state-transfer fidelity and simulated final states
+        by first calculating the initial cardinal states, and simulating the state-transfer procedure for each
+        Parameters
+        ----------
+        initial_basis_states: list
+            list of Qobjs of initial basis states in the full Hilbert space
+        label_list: list
+            list of labels associated with the initial states
+        ideal_final_basis_states: list
+            list of Qobjs of the ideal final states in reduced Hilbert space
+        keep_idxs: list
+            list of indices to keep in partial transfer after simulating state
+            transfer to yield the reduced Hilbert space
+
+        Returns
+        -------
+        fidelity, final simulated states
+        """
         op_dict_SR, initial_cardinal_states = operator_basis_lidar(
             initial_basis_states, label_list=label_list
         )
@@ -284,6 +383,7 @@ class SimulateGUE:
 
 
 class SimulateGUEDR(SimulateGUE, DualRailMixin):
+    """added dual-rail functionality for GUE calculations"""
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -293,6 +393,13 @@ class SimulateGUEDR(SimulateGUE, DualRailMixin):
 
 
 class SimulateGUEHashing(Hashing, SimulateGUE):
+    """
+    Use the Hashing algorithm introduced in https://arxiv.org/abs/1102.4006 to
+    simulate a reduced Hilbert space associated with a global-excitation-number cutoff.
+    All parameters are as in SimulateGUE except for
+    num_exc: int
+        global-excitation number cutoff
+    """
     def __init__(
             self,
             gamma_b_avg: float,
@@ -306,6 +413,7 @@ class SimulateGUEHashing(Hashing, SimulateGUE):
             **kwargs,
     ):
         Hashing.__init__(self, num_exc=num_exc, number_degrees_freedom=number_degrees_freedom)
+        # below we have to pass cavity_dim=1, a hack
         SimulateGUE.__init__(self, gamma_b_avg, gamma_c_avg, gamma_b_dev, gamma_c_dev,
                              cav_idx_dict, tran_res_idx_dict, cavity_dim=1,
                              number_degrees_freedom=number_degrees_freedom, **kwargs)
@@ -325,51 +433,27 @@ class SimulateGUEHashing(Hashing, SimulateGUE):
         return Qobj(vac)
 
     def _reduced_hash(self):
+        """Performing the partial trace is now tricky in this basis. First
+        step is to create an instance of Hashing with only 2 degrees of freedom
+        which will be the result after tracing out
+        """
         return Hashing(number_degrees_freedom=2, num_exc=self.num_exc)
 
     def reduced_zero_state(self):
-        """vacuum state used for fidelity calcs (trace out all irrelevant states)"""
+        """vacuum state used for fidelity calcs (trace out all irrelevant states). The vacuum state
+        is always the first one in the list"""
         red_hilbert_dim = self._reduced_hash().hilbert_dim()
         vac = np.zeros(red_hilbert_dim)
         vac[0] = 1.0
         return Qobj(vac)
 
     def reduced_rightward_state(self):
+        """as above, in the new basis associated with hashing"""
         new_hash = self._reduced_hash()
         red_c1 = new_hash.a_operator(0)
         red_c2 = new_hash.a_operator(1)
         vac = self.reduced_zero_state()
         return ((red_c1.dag() + 1j * red_c2.dag()) * vac).unit()
-
-
-class SimulateGUEHashingOptControl(SimulateGUEHashing):
-    def __init__(self, gamma_b_avg: float, gamma_c_avg: float, gamma_b_dev: float, gamma_c_dev: float,
-                 cav_idx_dict: dict, tran_res_idx_dict: dict, control_file_location: str = " ", **kwargs):
-        super().__init__(gamma_b_avg, gamma_c_avg, gamma_b_dev, gamma_c_dev,
-                         cav_idx_dict, tran_res_idx_dict, **kwargs)
-        self.control_file_location = control_file_location
-
-    def _setup_H_for_mesolve(self):
-        tlist, controls = extract_controls_QOGS(self.control_file_location)
-        if tlist[-1] != 2 * self.t_half:
-            warnings.warn(f"Supplied pulse time {2*self.t_half} does not match that extracted from"
-                          f"optimal control {tlist[-1]}. Proceeding with optimal control pulse time.")
-        H0_r, H_int_b, H_int_c = self.hamiltonian()
-        H = [
-            H0_r,
-            # controls[0] and controls[2] contain the I quadrature, don't need Q
-            [H_int_b + H_int_b.dag(), controls[0]],
-            [H_int_c + H_int_c.dag(), controls[2]],
-        ]
-        return tlist, H
-
-    def gamma_b_func(self, t, args=None):
-        tlist, controls = extract_controls_QOGS(self.control_file_location)
-        return CubicSpline(tlist, controls[0], bc_type="natural")
-
-    def gamma_c_func(self, t, args=None):
-        tlist, controls = extract_controls_QOGS(self.control_file_location)
-        return CubicSpline(tlist, controls[2], bc_type="natural")
 
 
 class SimulateGUEHashingDR(SimulateGUEHashing, DualRailMixin):
@@ -378,7 +462,9 @@ class SimulateGUEHashingDR(SimulateGUEHashing, DualRailMixin):
 
 
 class SimulateGUETwoWay(SimulateGUEHashing):
-    """compute the fidelity of state transfer for GUEs"""
+    """Now we want to include a GUE a to the left of GUE b to better simulate
+    the whole process which includes emitting simultaneously to the left and right. This
+    simulation includes 12 quantum elements (6 data cavities, 6 transfer resonators)"""
 
     def __init__(
         self,
@@ -394,7 +480,7 @@ class SimulateGUETwoWay(SimulateGUEHashing):
         scale_b: float = 1.018,
         scale_c: float = 1.017,
         t_half: float = 600.0,
-        B: float = 0.006,
+        xi: float = 0.006,
         c: float = 2.8284e-5,
         Gamma_1_cav: float = 0.0,
         Gamma_phi_cav: float = 0.0,
@@ -425,7 +511,7 @@ class SimulateGUETwoWay(SimulateGUEHashing):
         self.scale_b = scale_b
         self.scale_c = scale_c
         self.t_half = t_half
-        self.B = B
+        self.xi = xi
         self.c = c
         self.Gamma_1_cav = Gamma_1_cav
         self.Gamma_phi_cav = Gamma_phi_cav
@@ -462,6 +548,7 @@ class SimulateGUETwoWay(SimulateGUEHashing):
         self.c2_r = self.a_operator(tran_res_idx_dict["c2_r_idx"])
 
     def collective_loss_ops(self):
+        """collective loss ops for all three GUEs"""
         L_R_a = (
             np.sqrt(self.gamma_a_1) * self.a1_r
             - 1j * np.sqrt(self.gamma_a_2) * self.a2_r
@@ -603,34 +690,6 @@ class SimulateGUETwoWay(SimulateGUEHashing):
         red_hash = self._reduced_hash()
         (red_a1, red_a2) = (red_hash.a_operator(idx) for idx in range(0, 2))
         return ((red_a1.dag() - 1j * red_a2.dag()) * vac).unit()
-
-
-class SimulateGUETwoWayOptControl(SimulateGUETwoWay, SimulateGUEHashingOptControl):
-    def __init__(self, gamma_a_avg: float, gamma_b_avg: float, gamma_c_avg: float, gamma_a_dev: float,
-                 gamma_b_dev: float, gamma_c_dev: float, cav_idx_dict: dict, tran_res_idx_dict: dict,
-                 control_file_location: str = " ", **kwargs):
-        SimulateGUETwoWay.__init__(self, gamma_a_avg, gamma_b_avg, gamma_c_avg, gamma_a_dev, gamma_b_dev, gamma_c_dev,
-                                   cav_idx_dict, tran_res_idx_dict, **kwargs)
-        self.control_file_location = control_file_location
-
-    def _setup_H_for_mesolve(self):
-        tlist, controls = extract_controls_QOGS(self.control_file_location)
-        if tlist[-1] != 2 * self.t_half:
-            warnings.WarningMessage("Supplied pulse time does not match that extracted from"
-                                    "optimal control. Proceeding with optimal control pulse time.")
-        H0_r, H_int_a, H_int_b, H_int_c = self.hamiltonian()
-        H = [
-            H0_r,
-            # controls[0] and controls[2] contain the I quadrature, don't need Q
-            [H_int_a + H_int_a.dag(), controls[2]],
-            [H_int_b + H_int_b.dag(), controls[0]],
-            [H_int_c + H_int_c.dag(), controls[2]],
-        ]
-        return tlist, H
-
-    def gamma_a_func(self, t, args=None):
-        tlist, controls = extract_controls_QOGS(self.control_file_location)
-        return CubicSpline(tlist, controls[2], bc_type="natural")
 
 
 class SimulateGUETwoWayDR(SimulateGUETwoWay, DualRailMixin):

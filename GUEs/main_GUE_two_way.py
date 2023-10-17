@@ -4,9 +4,20 @@ from QRAM_utils.utils import write_to_h5
 
 
 def main_GUE_two_way(filepath, guefidelity, guefidelity_DR, param_dict):
-    red_zero_state = guefidelity.reduced_zero_state()
-    red_right_state = guefidelity.reduced_rightward_state()
-    red_left_state = guefidelity.reduced_leftward_state()
+    """
+    Main function for simulating the two-way state-transfer protocol.
+    Parameters
+    ----------
+    filepath: str
+        for saving
+    guefidelity: SimulateGUETwoWay
+        instance of class SimulateGUETwoWay, or child
+    guefidelity_DR: SimulateGUETwoWayDR
+        instance of class SimulateGUETwoWayDR, or child
+    param_dict: dict
+        dictionary of all parameters associated with the simulation
+    """
+    # initial states in the full Hilbert space
     state_000000 = guefidelity.vacuum_state()
     state_001000 = guefidelity.b1.dag() * state_000000
     state_000100 = guefidelity.b2.dag() * state_000000
@@ -14,8 +25,13 @@ def main_GUE_two_way(filepath, guefidelity, guefidelity_DR, param_dict):
     psi_init_L = (state_001000 - 1j * state_000100).unit()
     label_list_SR = ["0", "R", "L"]
     label_list_DR = ["R0", "L0", "0R", "0L"]
+    # keep the indices associated with the data cavities we emit to
     keep_idxs = [guefidelity.a1_idx, guefidelity.a2_idx, guefidelity.c1_idx, guefidelity.c2_idx]
     initial_basis_states = [state_000000, psi_init_R, psi_init_L]
+    # final states in the reduced Hilbert space
+    red_zero_state = guefidelity.reduced_zero_state()
+    red_right_state = guefidelity.reduced_rightward_state()
+    red_left_state = guefidelity.reduced_leftward_state()
     ideal_final_basis_states = [red_zero_state, red_right_state, red_left_state]
     ideal_final_basis_states_DR = [
         tensor(red_right_state, red_zero_state),
