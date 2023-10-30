@@ -1,13 +1,13 @@
 #!/bin/bash
 
 ###### modify params here
-NUM_PTS=401
+NUM_PTS=101
 NUM_ARRAY=$NUM_PTS
 NUM_IDXS=$((NUM_ARRAY-1))
 NUM_CPUS=1
-EPS=0.005
-CAV_DIM=10
-NUM_CAVS=1
+EPS=0.01
+CAV_DIM=9
+NUM_CAVS=2
 NSTEPS=200000
 ######
 

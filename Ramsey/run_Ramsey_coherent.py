@@ -25,8 +25,7 @@ def run_coherent(idx, num_pts, eps, cav_dim, num_cavs=1, nsteps=200000, thermal_
     param_dict["nsteps"] = nsteps
     param_dict["thermal_time"] = thermal_time
     ramsey_coherent = CoherentDephasing(**param_dict)
-    filepath = (f"out/{str(idx).zfill(5)}_numcav_{param_dict['num_cavs']}"
-                + f"_cavdim_{param_dict['cavity_dim']}_eps_{eps}_cohere_Ramsey.h5py")
+    filepath = f"out/{str(idx).zfill(5)}_cohere_Ramsey.h5py"
     p0 = (6 * 10 ** 4, 0.045, 0.5, 0.2, -1)
     ramsey_coherent.main_ramsey(filepath, p0)
 
