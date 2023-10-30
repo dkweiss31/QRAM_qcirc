@@ -309,15 +309,14 @@ class CoherentDephasing(RamseyExperiment):
         for (eps, a) in zip(self.epsilon_array, a_ops):
             H[0] += -self.omega_d_cav * a.dag() * a
             H[0] += eps * a + np.conj(eps) * a.dag()
-        # Also include counter-rotating terms Yao mentioned?
         if len(a_ops) == 2:
             a, b = a_ops[0], a_ops[1]
             phi_a, phi_b, phi_q = self.phi_cav(0), self.phi_cav(1), self.phi_q()
-            H[0] += (-self.EJ / 24) * (
-                24 * phi_a * phi_b * phi_q**2 * (-0.5 * sz) * (a.dag() * b + b.dag() * a)
+            pref = phi_a * phi_b * phi_q**2 * np.exp(
+                -0.5 * (phi_a**2 + phi_b**2 + phi_q**2)
             )
             H[0] += (-self.EJ / 24) * (
-                12 * phi_a * phi_b * phi_q**2 * (a.dag() * b + b.dag() * a)
+                24 * pref * (-0.5 * sz) * (a.dag() * b + b.dag() * a)
             )
         return H
 
