@@ -7,7 +7,7 @@ from param_dicts import param_dict_2
 run_coherent = True
 run_thermal = False
 directory = "Ramsey/out"
-param_dict_2["cavity_dim"] = 5
+param_dict_2["cavity_dim"] = 4
 if run_thermal:
     filepath = generate_file_path(
         "hdf5", f"Ramsey_cav_{param_dict_2['cavity_dim']}_interfer_{param_dict_2['interference']}", directory

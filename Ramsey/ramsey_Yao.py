@@ -28,7 +28,10 @@ class RamseyExperiment:
         omega_tmon=2.0 * np.pi * 5.0,
         omega_cavs=(2.0 * np.pi * 4.0, ),
         chi_cavstmon=(2.0 * np.pi * 0.001, ),
+        chi_crosscav=(2.0 * np.pi * 0.0, ),
         kappa_cavs=(2.0 * np.pi * 0.04, ),
+        EJ=32.69,
+        alpha=-0.124,
         temp=0.1,
         tmon_dim=2,
         cavity_dim=4,
@@ -47,7 +50,10 @@ class RamseyExperiment:
         self.omega_tmon = omega_tmon
         self.omega_cavs = omega_cavs
         self.chi_cavstmon = chi_cavstmon
+        self.chi_crosscav = chi_crosscav
         self.kappa_cavs = kappa_cavs
+        self.EJ = EJ
+        self.alpha = alpha
         self.temp = temp
         self.tmon_dim = tmon_dim
         self.cavity_dim = cavity_dim
@@ -81,14 +87,16 @@ class RamseyExperiment:
         return 1.0 / (np.exp(hbar * self.omega_cavs * 10**9 / (k * self.temp)) - 1)
 
     def hamiltonian(self):
-        annihilation_ops_list = self.annihilation_ops()
+        a_ops = self.annihilation_ops()
         (sx, sy, sz) = self.tmon_Pauli_ops()
         H0 = sum(
             omega * a_op.dag() * a_op
             for (omega, a_op) in zip(self.omega_cavs, self.annihilation_ops())
         )
-        for idx, a_op in enumerate(annihilation_ops_list):
+        for idx, a_op in enumerate(a_ops):
             H0 += 0.5 * self.chi_cavstmon[idx] * a_op.dag() * a_op * sz
+        if len(a_ops) == 2:
+            H0 += self.chi_crosscav[0] * a_ops[0].dag() * a_ops[0] * a_ops[1].dag() * a_ops[1]
         return [
             H0,
         ]
@@ -286,45 +294,11 @@ class RamseyExperiment:
 class CoherentDephasing(RamseyExperiment):
     def __init__(
         self,
-        interference=True,
-        omega_tmon=2.0 * np.pi * 5.0,
-        omega_cavs=(2.0 * np.pi * 4.0,),
-        chi_cavstmon=(2.0 * np.pi * 0.001,),
-        kappa_cavs=(2.0 * np.pi * 0.04,),
-        temp=0.1,
-        tmon_dim=2,
-        cavity_dim=4,
-        num_cavs=1,
-        thermal_time=200.0,
-        delay_times=np.linspace(0.0, 2000, 301),
-        omega_d_tmon=2.0 * np.pi * (5.7423 - 0.0071),
-        tmon_drive_amp: float = 2.0 * np.pi * 0.01,
         omega_d_cav=2.0 * np.pi * 3.0,
-        epsilon_array=(2.0 * np.pi * 0.001, ),
-        nsteps=1000,
-        atol=1e-8,
-        rtol=1e-6,
-        loss_ratio=0.0,
+        epsilon_array=(2.0 * np.pi * 0.001,),
+        **kwargs,
     ):
-        super().__init__(
-            interference,
-            omega_tmon,
-            omega_cavs,
-            chi_cavstmon,
-            kappa_cavs,
-            temp,
-            tmon_dim,
-            cavity_dim,
-            num_cavs,
-            thermal_time,
-            delay_times,
-            omega_d_tmon,
-            tmon_drive_amp,
-            nsteps,
-            atol,
-            rtol,
-            loss_ratio=loss_ratio
-        )
+        super().__init__(**kwargs)
         self.omega_d_cav = omega_d_cav
         self.epsilon_array = epsilon_array
 
@@ -337,12 +311,21 @@ class CoherentDephasing(RamseyExperiment):
             H[0] += eps * a + np.conj(eps) * a.dag()
         # Also include counter-rotating terms Yao mentioned?
         if len(a_ops) == 2:
-            chi_mean = np.average(self.chi_cavstmon)
-            counter_op = sz * a_ops[0].dag() * a_ops[1]
-            omega_diff = self.omega_cavs[0] - self.omega_cavs[1]
-            H += [[0.5 * chi_mean * counter_op, lambda t, args: np.exp(1j * omega_diff * t)], ]
-            H += [[0.5 * chi_mean * counter_op.dag(), lambda t, args: np.exp(-1j * omega_diff * t)], ]
+            a, b = a_ops[0], a_ops[1]
+            phi_a, phi_b, phi_q = self.phi_cav(0), self.phi_cav(1), self.phi_q()
+            H[0] += (-self.EJ / 24) * (
+                24 * phi_a * phi_b * phi_q**2 * (-0.5 * sz) * (a.dag() * b + b.dag() * a)
+            )
+            H[0] += (-self.EJ / 24) * (
+                12 * phi_a * phi_b * phi_q**2 * (a.dag() * b + b.dag() * a)
+            )
         return H
+
+    def phi_cav(self, idx=0):
+        return (self.EJ / (-4 * self.alpha))**(1/4) * (self.chi_cavstmon[idx] / (-self.EJ))**(1/2)
+
+    def phi_q(self):
+        return (-4 * self.alpha / self.EJ)**(1/4)
 
 
 class CoherentDephasingCounterRotating(CoherentDephasing):
