@@ -254,7 +254,7 @@ class RamseyExperiment:
             plt.savefig(filename)
         plt.show()
 
-    def main_ramsey(self, filepath, p0=(6 * 10 ** 4, 0.045, 0.5, 0.2, -1)):
+    def main_ramsey(self, filepath, p0=(6 * 10 ** 4, 0.045, 0.5, 0.5, -1.7)):
         naive_gamma_phi = sum(
             self.gamma_phi_full_func()
         )
