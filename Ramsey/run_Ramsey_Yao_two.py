@@ -7,7 +7,7 @@ from param_dicts import param_dict_2
 run_coherent = True
 run_thermal = False
 directory = "Ramsey/out"
-param_dict_2["cavity_dim"] = 4
+param_dict_2["cavity_dim"] = 8
 if run_thermal:
     filepath = generate_file_path(
         "hdf5", f"Ramsey_cav_{param_dict_2['cavity_dim']}_interfer_{param_dict_2['interference']}", directory
@@ -19,6 +19,7 @@ if run_thermal:
 if run_coherent:
     omega_d_cav = 2.0 * np.pi * 3.38
     epsilon_array = 2.0 * np.pi * np.array([0.01, 0.01])
+    param_dict_2["kappa_cavs"] = 0.1 * np.abs(param_dict_2["chi_cavstmon"])
     param_dict_2["omega_d_cav"] = omega_d_cav
     param_dict_2["epsilon_array"] = epsilon_array
     param_dict_2["temp"] = 1e-8

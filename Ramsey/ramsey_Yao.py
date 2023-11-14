@@ -1,5 +1,4 @@
 import copy
-import warnings
 
 import h5py
 import matplotlib.pyplot as plt
@@ -14,6 +13,7 @@ from qutip import (
     qeye,
     tensor,
     basis,
+    expect
 )
 from scipy.constants import hbar, k
 from scipy.optimize import curve_fit
@@ -201,9 +201,13 @@ class RamseyExperiment:
             e_ops=e_ops,
             options=options,
         )
-        print(np.max(result.expect))
-        if np.max(result.expect) >= self.cavity_dim - 1:
-            warnings.WarningMessage("likely need to increase cavity_dim")
+        # take occupation of first cavity as representative
+        highest_state_proj = (
+            basis(self.cavity_dim, self.cavity_dim - 1)
+            * basis(self.cavity_dim, self.cavity_dim - 1).dag()
+        )
+        proj = id_wrap_ops(highest_state_proj, 0, self.truncated_dims)
+        print(expect(proj, result.final_state))
         return result.final_state
 
     def readout_proj(self):
@@ -250,6 +254,8 @@ class RamseyExperiment:
         ax.plot(self.delay_times, ramsey_result, "o")
         plot_times = np.linspace(0.0, self.delay_times[-1], 2000)
         ax.plot(plot_times, self.T2_func(plot_times, *popt_T2), linestyle="-")
+        ax.set_ylabel(r"$P(|1\rangle)$", fontsize=12)
+        ax.set_xlabel("time [ns]", fontsize=12)
         if filename is not None:
             plt.savefig(filename)
         plt.show()

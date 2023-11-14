@@ -29,7 +29,7 @@ cat > $SBATCH_SCRIPT <<EOL
 #SBATCH --cpus-per-task=$NUM_CPUS
 #SBATCH --mem-per-cpu=8G
 #SBATCH --time=01:00:00
-#SBATCH --mail-type=START,END,FAIL
+#SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=daniel.weiss@yale.edu
 
 ARRAY_IDX_LIST=($(seq 0 1 $NUM_IDXS))
