@@ -86,6 +86,12 @@ class RamseyExperiment:
     def nths(self):
         return 1.0 / (np.exp(hbar * self.omega_cavs * 10**9 / (k * self.temp)) - 1)
 
+    def phi_cav(self, idx=0):
+        return (self.EJ / (-4 * self.alpha))**(1/4) * (self.chi_cavstmon[idx] / (-self.EJ))**(1/2)
+
+    def phi_q(self):
+        return (-4 * self.alpha / self.EJ)**(1/4)
+
     def hamiltonian(self):
         a_ops = self.annihilation_ops()
         (sx, sy, sz) = self.tmon_Pauli_ops()
@@ -95,8 +101,29 @@ class RamseyExperiment:
         )
         for idx, a_op in enumerate(a_ops):
             H0 += 0.5 * self.chi_cavstmon[idx] * a_op.dag() * a_op * sz
+        if len(a_ops) == 1:
+            a = a_ops[0]
+            phi_a, phi_q = self.phi_cav(0), self.phi_q()
+            H0 += (-self.EJ / 24) * (
+                    12 * phi_a ** 2 * (phi_a ** 2 + phi_q ** 2) * a.dag() * a
+            )
         if len(a_ops) == 2:
-            H0 += self.chi_crosscav[0] * a_ops[0].dag() * a_ops[0] * a_ops[1].dag() * a_ops[1]
+            a, b = a_ops[0], a_ops[1]
+            H0 += self.chi_crosscav[0] * a.dag() * a * b.dag() * b
+            phi_a, phi_b, phi_q = self.phi_cav(0), self.phi_cav(1), self.phi_q()
+            pref = phi_a * phi_b * phi_q**2 * np.exp(
+                -0.5 * (phi_a**2 + phi_b**2 + phi_q**2)
+            )
+            H0 += (-self.EJ / 24) * (
+                24 * pref * (-0.5 * sz) * (a.dag() * b + b.dag() * a)
+            )
+            # less exact version for these two (update later)
+            H0 += (-self.EJ / 24) * (
+                12 * phi_a**2 * (phi_a**2 + phi_b**2 + phi_q**2) * a.dag() * a
+            )
+            H0 += (-self.EJ / 24) * (
+                12 * phi_b**2 * (phi_a**2 + phi_b**2 + phi_q**2) * b.dag() * b
+            )
         return [
             H0,
         ]
@@ -311,26 +338,10 @@ class CoherentDephasing(RamseyExperiment):
     def hamiltonian(self):
         H = super().hamiltonian()
         a_ops = self.annihilation_ops()
-        (sx, sy, sz) = self.tmon_Pauli_ops()
         for (eps, a) in zip(self.epsilon_array, a_ops):
             H[0] += -self.omega_d_cav * a.dag() * a
             H[0] += eps * a + np.conj(eps) * a.dag()
-        if len(a_ops) == 2:
-            a, b = a_ops[0], a_ops[1]
-            phi_a, phi_b, phi_q = self.phi_cav(0), self.phi_cav(1), self.phi_q()
-            pref = phi_a * phi_b * phi_q**2 * np.exp(
-                -0.5 * (phi_a**2 + phi_b**2 + phi_q**2)
-            )
-            H[0] += (-self.EJ / 24) * (
-                24 * pref * (-0.5 * sz) * (a.dag() * b + b.dag() * a)
-            )
         return H
-
-    def phi_cav(self, idx=0):
-        return (self.EJ / (-4 * self.alpha))**(1/4) * (self.chi_cavstmon[idx] / (-self.EJ))**(1/2)
-
-    def phi_q(self):
-        return (-4 * self.alpha / self.EJ)**(1/4)
 
 
 class CoherentDephasingCounterRotating(CoherentDephasing):
