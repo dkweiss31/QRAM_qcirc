@@ -30,8 +30,8 @@ class RamseyExperiment:
         chi_cavstmon=(2.0 * np.pi * 0.001, ),
         chi_crosscav=(2.0 * np.pi * 0.0, ),
         kappa_cavs=(2.0 * np.pi * 0.04, ),
-        EJ=32.69,
-        alpha=-0.124,
+        EJ=2.0 * np.pi * 32.69,
+        alpha=2.0 * np.pi * (-0.124),
         temp=0.1,
         tmon_dim=2,
         cavity_dim=4,
@@ -44,7 +44,6 @@ class RamseyExperiment:
         atol=1e-8,
         rtol=1e-6,
         destructive_interference=False,
-        artificial_scale=1.0,
     ):
         assert len(omega_cavs) == len(chi_cavstmon) == len(kappa_cavs) == num_cavs
         self.interference = interference
@@ -67,7 +66,6 @@ class RamseyExperiment:
         self.atol = atol
         self.rtol = rtol
         self.destructive_interference = destructive_interference
-        self.artificial_scale = artificial_scale
         self.truncated_dims = num_cavs * [cavity_dim] + [tmon_dim]
 
     def tmon_Pauli_ops(self):
@@ -89,10 +87,10 @@ class RamseyExperiment:
         return 1.0 / (np.exp(hbar * self.omega_cavs * 10**9 / (k * self.temp)) - 1)
 
     def phi_cav(self, idx=0):
-        return (self.EJ / (-4 * self.alpha))**(1/4) * (self.chi_cavstmon[idx] / (-self.EJ))**(1/2)
+        return (self.chi_cavstmon[idx]**2 / (8 * np.abs(self.alpha) * self.EJ))**(1/4)
 
     def phi_q(self):
-        return (-4 * self.alpha / self.EJ)**(1/4)
+        return (2 * np.abs(self.alpha) / self.EJ)**(1/4)
 
     def hamiltonian(self):
         a_ops = self.annihilation_ops()
@@ -117,7 +115,7 @@ class RamseyExperiment:
                 -0.5 * (phi_a**2 + phi_b**2 + phi_q**2)
             )
             H0 += (-self.EJ / 24) * (
-                24 * pref * self.artificial_scale * (-0.5 * sz) * (a.dag() * b + b.dag() * a)
+                24 * pref * (-0.5 * sz) * (a.dag() * b + b.dag() * a)
             )
             # less exact version for these two (update later)
             H0 += (-self.EJ / 24) * (
