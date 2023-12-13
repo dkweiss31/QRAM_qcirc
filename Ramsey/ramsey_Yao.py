@@ -43,7 +43,7 @@ class RamseyExperiment:
         nsteps=1000,
         atol=1e-8,
         rtol=1e-6,
-        loss_ratio=0.0,
+        destructive_interference=False,
     ):
         assert len(omega_cavs) == len(chi_cavstmon) == len(kappa_cavs) == num_cavs
         self.interference = interference
@@ -65,7 +65,7 @@ class RamseyExperiment:
         self.nsteps = nsteps
         self.atol = atol
         self.rtol = rtol
-        self.loss_ratio = loss_ratio
+        self.destructive_interference = destructive_interference
         self.truncated_dims = num_cavs * [cavity_dim] + [tmon_dim]
 
     def tmon_Pauli_ops(self):
@@ -135,15 +135,15 @@ class RamseyExperiment:
         elif len(a_ops) == 2:
             kappa_cavs = self.kappa_cavs
             nths = self.nths()
-            lowering_1 = (1 - self.loss_ratio) * (np.sqrt(kappa_cavs[0] * (1 + nths[0])) * a_ops[0]
-                          + np.sqrt(kappa_cavs[1] * (1 + nths[1])) * a_ops[1])
-            lowering_2 = self.loss_ratio * (np.sqrt(kappa_cavs[0] * (1 + nths[0])) * a_ops[0]
-                          - np.sqrt(kappa_cavs[1] * (1 + nths[1])) * a_ops[1])
-            raising_1 = (1 - self.loss_ratio) * (np.sqrt(kappa_cavs[0] * nths[0]) * a_ops[0].dag()
-                          + np.sqrt(kappa_cavs[1] * nths[1]) * a_ops[1].dag())
-            raising_2 = self.loss_ratio * (np.sqrt(kappa_cavs[0] * nths[0]) * a_ops[0].dag()
-                                           - np.sqrt(kappa_cavs[1] * nths[1]) * a_ops[1].dag())
-            return [lowering_1, lowering_2, raising_1, raising_2]
+            if self.destructive_interference:
+                coeff = -1
+            else:
+                coeff = 1
+            lowering = (np.sqrt(kappa_cavs[0] * (1 + nths[0])) * a_ops[0]
+                        + coeff * np.sqrt(kappa_cavs[1] * (1 + nths[1])) * a_ops[1])
+            raising = (np.sqrt(kappa_cavs[0] * nths[0]) * a_ops[0].dag()
+                       + coeff * np.sqrt(kappa_cavs[1] * nths[1]) * a_ops[1].dag())
+            return [lowering, raising]
         else:
             raise RuntimeError("more than two cavities not supported")
 
@@ -329,11 +329,13 @@ class CoherentDephasing(RamseyExperiment):
         self,
         omega_d_cav=2.0 * np.pi * 3.0,
         epsilon_array=(2.0 * np.pi * 0.001,),
+        include_cr=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.omega_d_cav = omega_d_cav
         self.epsilon_array = epsilon_array
+        self.include_cr = include_cr
 
     def hamiltonian(self):
         H = super().hamiltonian()
@@ -341,6 +343,7 @@ class CoherentDephasing(RamseyExperiment):
         for (eps, a) in zip(self.epsilon_array, a_ops):
             H[0] += -self.omega_d_cav * a.dag() * a
             H[0] += eps * a + np.conj(eps) * a.dag()
-            H += [[eps * a, lambda t, args: np.exp(-2 * 1j * self.omega_d_cav * t)], ]
-            H += [[np.conj(eps) * a.dag(), lambda t, args: np.exp(2 * 1j * self.omega_d_cav * t)], ]
+            if self.include_cr:
+                H += [[eps * a, lambda t, args: np.exp(-2 * 1j * self.omega_d_cav * t)], ]
+                H += [[np.conj(eps) * a.dag(), lambda t, args: np.exp(2 * 1j * self.omega_d_cav * t)], ]
         return H

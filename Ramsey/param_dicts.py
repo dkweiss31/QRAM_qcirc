@@ -29,9 +29,10 @@ param_dict_2 = {
     "chi_cavstmon": chi_cavstmon,
     "chi_crosscav": chi_crosscav,
     "temp": 1e-8,
-    "loss_ratio": 0.0,
     "EJ": EJ,
     "alpha": alpha,
+    "destructive_interference": False,
+    "include_cr": False,
 }
 
 param_dict_1 = {
@@ -53,4 +54,5 @@ param_dict_1 = {
     "temp": 1e-8,
     "EJ": EJ,
     "alpha": alpha,
+    "include_cr": False,
 }
