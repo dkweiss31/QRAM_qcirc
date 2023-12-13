@@ -33,6 +33,7 @@ param_dict_2 = {
     "alpha": alpha,
     "destructive_interference": False,
     "include_cr": False,
+    "artificial_scale": 1.0,
 }
 
 param_dict_1 = {

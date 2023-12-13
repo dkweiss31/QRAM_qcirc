@@ -44,6 +44,7 @@ class RamseyExperiment:
         atol=1e-8,
         rtol=1e-6,
         destructive_interference=False,
+        artificial_scale=1.0,
     ):
         assert len(omega_cavs) == len(chi_cavstmon) == len(kappa_cavs) == num_cavs
         self.interference = interference
@@ -66,6 +67,7 @@ class RamseyExperiment:
         self.atol = atol
         self.rtol = rtol
         self.destructive_interference = destructive_interference
+        self.artificial_scale = artificial_scale
         self.truncated_dims = num_cavs * [cavity_dim] + [tmon_dim]
 
     def tmon_Pauli_ops(self):
@@ -115,7 +117,7 @@ class RamseyExperiment:
                 -0.5 * (phi_a**2 + phi_b**2 + phi_q**2)
             )
             H0 += (-self.EJ / 24) * (
-                24 * pref * (-0.5 * sz) * (a.dag() * b + b.dag() * a)
+                24 * pref * self.artificial_scale * (-0.5 * sz) * (a.dag() * b + b.dag() * a)
             )
             # less exact version for these two (update later)
             H0 += (-self.EJ / 24) * (
