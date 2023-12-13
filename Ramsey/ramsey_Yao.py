@@ -87,7 +87,7 @@ class RamseyExperiment:
         return 1.0 / (np.exp(hbar * self.omega_cavs * 10**9 / (k * self.temp)) - 1)
 
     def phi_cav(self, idx=0):
-        return (self.chi_cavstmon[idx]**2 / (8 * np.abs(self.alpha) * self.EJ))**(1/4)
+        return (self.chi_cavstmon[idx]**2 / (2 * np.abs(self.alpha) * self.EJ))**(1/4)
 
     def phi_q(self):
         return (2 * np.abs(self.alpha) / self.EJ)**(1/4)
