@@ -1,5 +1,4 @@
 import copy
-
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
@@ -111,13 +110,18 @@ class RamseyExperiment:
             a, b = a_ops[0], a_ops[1]
             H0 += self.chi_crosscav[0] * a.dag() * a * b.dag() * b
             phi_a, phi_b, phi_q = self.phi_cav(0), self.phi_cav(1), self.phi_q()
+            # check that the expressions for phi_a and phi_q are correct
+            assert np.allclose(0.5 * self.chi_cavstmon[0], -self.EJ * 0.5 * phi_a ** 2 * phi_q ** 2)
+            assert np.allclose(0.5 * self.chi_cavstmon[1], -self.EJ * 0.5 * phi_b ** 2 * phi_q ** 2)
             pref = phi_a * phi_b * phi_q**2 * np.exp(
                 -0.5 * (phi_a**2 + phi_b**2 + phi_q**2)
             )
             H0 += (-self.EJ / 24) * (
-                24 * pref * (-0.5 * sz) * (a.dag() * b + b.dag() * a)
+                24 * pref * (0.5 * sz) * (a.dag() * b + b.dag() * a)
             )
             # less exact version for these two (update later)
+            # possible missing terms: have an effective exchange interaction
+            # between qubit and resonators e.g. a^dag q or q^dag b.
             H0 += (-self.EJ / 24) * (
                 12 * phi_a**2 * (phi_a**2 + phi_b**2 + phi_q**2) * a.dag() * a
             )
