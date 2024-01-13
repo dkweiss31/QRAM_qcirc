@@ -217,7 +217,7 @@ def extract_data_for_plotting(num_range: range, filefrag: str, param_key: str, d
             data_dict, param_dict = extract_info_from_h5(file_name)
             data_list.append(data_dict[data_key])
             sweep_param_list.append(param_dict[param_key])
-        except KeyError:
+        except KeyError or FileNotFoundError:
             warnings.warn(f"run associated with {file_name} failed to extract {param_key}")
     sweep_param_list = np.array(sweep_param_list)
     data_list = np.array(data_list)
