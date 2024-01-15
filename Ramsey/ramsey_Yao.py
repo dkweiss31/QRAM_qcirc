@@ -5,9 +5,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from qutip import (
     destroy,
-    sigmax,
-    sigmay,
-    sigmaz,
     mesolve,
     Options,
     qeye,
@@ -68,12 +65,10 @@ class RamseyExperiment:
         self.destructive_interference = destructive_interference
         self.truncated_dims = num_cavs * [cavity_dim] + [tmon_dim]
 
-    def tmon_Pauli_ops(self):
+    def tmon_ops(self):
         tmon_idx = self.num_cavs
-        sx = id_wrap_ops(sigmax(), tmon_idx, self.truncated_dims)
-        sy = id_wrap_ops(sigmay(), tmon_idx, self.truncated_dims)
-        sz = id_wrap_ops(sigmaz(), tmon_idx, self.truncated_dims)
-        return sx, sy, sz
+        q = id_wrap_ops(destroy(2), tmon_idx, self.truncated_dims)
+        return q
 
     def annihilation_ops(self):
         annihilation_ops_list = []
@@ -94,13 +89,13 @@ class RamseyExperiment:
 
     def hamiltonian(self):
         a_ops = self.annihilation_ops()
-        (sx, sy, sz) = self.tmon_Pauli_ops()
+        q = self.tmon_ops()
         H0 = sum(
             omega * a_op.dag() * a_op
             for (omega, a_op) in zip(self.omega_cavs, self.annihilation_ops())
         )
         for idx, a_op in enumerate(a_ops):
-            H0 += 0.5 * self.chi_cavstmon[idx] * a_op.dag() * a_op * sz
+            H0 += self.chi_cavstmon[idx] * a_op.dag() * a_op * q.dag() * q
         if len(a_ops) == 1:
             a = a_ops[0]
             phi_a, phi_q = self.phi_cav(0), self.phi_q()
@@ -112,16 +107,18 @@ class RamseyExperiment:
             H0 += self.chi_crosscav[0] * a.dag() * a * b.dag() * b
             phi_a, phi_b, phi_q = self.phi_cav(0), self.phi_cav(1), self.phi_q()
             # check that the expressions for phi_a and phi_q are correct
-            assert np.allclose(0.5 * self.chi_cavstmon[0], -self.EJ * 0.5 * phi_a ** 2 * phi_q ** 2)
-            assert np.allclose(0.5 * self.chi_cavstmon[1], -self.EJ * 0.5 * phi_b ** 2 * phi_q ** 2)
+            assert np.allclose(self.chi_cavstmon[0], -self.EJ * phi_a ** 2 * phi_q ** 2)
+            assert np.allclose(self.chi_cavstmon[1], -self.EJ * phi_b ** 2 * phi_q ** 2)
             pref = phi_a * phi_b * phi_q**2 * np.exp(
                 -0.5 * (phi_a**2 + phi_b**2 + phi_q**2)
             )
             if self.interference:
                 H0 += (-self.EJ / 24) * (
-                    24 * pref * (0.5 * sz) * (a.dag() * b + b.dag() * a)
+                    24 * pref * q.dag() * q * (a.dag() * b + b.dag() * a)
                 )
-            # less exact version for these two (update later)
+                H0 += (-self.EJ / 24) * (
+                    12 * phi_a * phi_b * phi_q ** 2 * (a.dag() * b + b.dag() * a)
+                )
             H0 += (-self.EJ / 24) * (
                 12 * phi_a**2 * (phi_a**2 + phi_b**2 + phi_q**2) * a.dag() * a
             )
@@ -249,14 +246,14 @@ class RamseyExperiment:
 
     def ramsey_experiment(self):
         final_prob = np.zeros_like(self.delay_times)
-        (sx, sy, sz) = self.tmon_Pauli_ops()
+        q = self.tmon_ops()
         thermal_state = self.obtain_thermal_state()
-        H0_q = -0.5 * (self.omega_tmon - self.omega_d_tmon) * sz
+        H0_q = (self.omega_tmon - self.omega_d_tmon) * q.dag() * q
         H = self.hamiltonian()
         H[0] += H0_q
         # Hamiltonian for pi/2 pulses
         H_with_drive = copy.deepcopy(H)
-        H_with_drive[0] += 0.5 * self.tmon_drive_amp * sx
+        H_with_drive[0] += 0.5 * self.tmon_drive_amp * (q + q.dag())
         t_pi2 = np.pi / (2 * self.tmon_drive_amp)
         # pi/2 pulses
         state_after_prev_delay = self.mesolve_for_final_state(
@@ -317,8 +314,8 @@ class RamseyExperiment:
             window = (0, len(self.delay_times))
         popt_T2, pcov_T2 = curve_fit(
             self.T2_func,
-            self.delay_times[window[0] : window[1]],
-            ramsey_result[window[0] : window[1]],
+            self.delay_times[window[0]: window[1]],
+            ramsey_result[window[0]: window[1]],
             p0=p0,
             maxfev=6000,
             bounds=((100, -2, -2, -2, -np.pi), (10**15, 2, 2, 2, np.pi)),
