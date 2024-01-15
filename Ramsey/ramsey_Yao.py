@@ -41,6 +41,8 @@ class RamseyExperiment:
         atol=1e-8,
         rtol=1e-6,
         destructive_interference=False,
+        interference_scale=1.0,
+
     ):
         assert len(omega_cavs) == len(chi_cavstmon) == len(kappa_cavs) == num_cavs
         self.interference = interference
@@ -63,6 +65,7 @@ class RamseyExperiment:
         self.atol = atol
         self.rtol = rtol
         self.destructive_interference = destructive_interference
+        self.interference_scale = interference_scale
         self.truncated_dims = num_cavs * [cavity_dim] + [tmon_dim]
 
     def tmon_ops(self):
@@ -110,7 +113,8 @@ class RamseyExperiment:
             assert np.allclose(self.chi_cavstmon[0], -self.EJ * phi_a ** 2 * phi_q ** 2)
             assert np.allclose(self.chi_cavstmon[1], -self.EJ * phi_b ** 2 * phi_q ** 2)
             H0 += (-self.EJ / 24) * (
-                24 * phi_a * phi_b * phi_q**2 * q.dag() * q * (a.dag() * b + b.dag() * a)
+                    self.interference_scale * 24 * phi_a * phi_b * phi_q**2
+                    * q.dag() * q * (a.dag() * b + b.dag() * a)
             )
             H0 += (-self.EJ / 24) * (
                 12 * phi_a * phi_b * phi_q ** 2 * (a.dag() * b + b.dag() * a)
