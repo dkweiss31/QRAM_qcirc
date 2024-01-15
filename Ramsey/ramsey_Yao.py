@@ -112,13 +112,12 @@ class RamseyExperiment:
             pref = phi_a * phi_b * phi_q**2 * np.exp(
                 -0.5 * (phi_a**2 + phi_b**2 + phi_q**2)
             )
-            if self.interference:
-                H0 += (-self.EJ / 24) * (
-                    24 * pref * q.dag() * q * (a.dag() * b + b.dag() * a)
-                )
-                H0 += (-self.EJ / 24) * (
-                    12 * phi_a * phi_b * phi_q ** 2 * (a.dag() * b + b.dag() * a)
-                )
+            H0 += (-self.EJ / 24) * (
+                24 * pref * q.dag() * q * (a.dag() * b + b.dag() * a)
+            )
+            H0 += (-self.EJ / 24) * (
+                12 * phi_a * phi_b * phi_q ** 2 * (a.dag() * b + b.dag() * a)
+            )
             H0 += (-self.EJ / 24) * (
                 12 * phi_a**2 * (phi_a**2 + phi_b**2 + phi_q**2) * a.dag() * a
             )
