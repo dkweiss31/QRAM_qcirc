@@ -109,11 +109,8 @@ class RamseyExperiment:
             # check that the expressions for phi_a and phi_q are correct
             assert np.allclose(self.chi_cavstmon[0], -self.EJ * phi_a ** 2 * phi_q ** 2)
             assert np.allclose(self.chi_cavstmon[1], -self.EJ * phi_b ** 2 * phi_q ** 2)
-            pref = phi_a * phi_b * phi_q**2 * np.exp(
-                -0.5 * (phi_a**2 + phi_b**2 + phi_q**2)
-            )
             H0 += (-self.EJ / 24) * (
-                24 * pref * q.dag() * q * (a.dag() * b + b.dag() * a)
+                24 * phi_a * phi_b * phi_q**2 * q.dag() * q * (a.dag() * b + b.dag() * a)
             )
             H0 += (-self.EJ / 24) * (
                 12 * phi_a * phi_b * phi_q ** 2 * (a.dag() * b + b.dag() * a)
