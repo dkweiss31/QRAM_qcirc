@@ -141,9 +141,9 @@ class RamseyExperiment:
             else:
                 coeff = 1
             lowering = (np.sqrt(kappa_cavs[0] * (1 + nths[0])) * a_ops[0]
-                        + coeff * np.sqrt(kappa_cavs[1] * (1 + nths[1])) * a_ops[1])
+                        - coeff * np.sqrt(kappa_cavs[1] * (1 + nths[1])) * a_ops[1])
             raising = (np.sqrt(kappa_cavs[0] * nths[0]) * a_ops[0].dag()
-                       + coeff * np.sqrt(kappa_cavs[1] * nths[1]) * a_ops[1].dag())
+                       - coeff * np.sqrt(kappa_cavs[1] * nths[1]) * a_ops[1].dag())
             return [lowering, raising]
         else:
             raise RuntimeError("more than two cavities not supported")
@@ -341,10 +341,20 @@ class CoherentDephasing(RamseyExperiment):
     def hamiltonian(self):
         H = super().hamiltonian()
         a_ops = self.annihilation_ops()
-        for (eps, a) in zip(self.epsilon_array, a_ops):
+        if len(a_ops) == 1:
+            a = a_ops[0]
+            eps = self.epsilon_array[0]
             H[0] += -self.omega_d_cav * a.dag() * a
             H[0] += eps * a + np.conj(eps) * a.dag()
-            if self.include_cr:
-                H += [[eps * a, lambda t, args: np.exp(-2 * 1j * self.omega_d_cav * t)], ]
-                H += [[np.conj(eps) * a.dag(), lambda t, args: np.exp(2 * 1j * self.omega_d_cav * t)], ]
+        elif len(a_ops) == 2:
+            a, b = a_ops[0], a_ops[1]
+            eps_a, eps_b = self.epsilon_array[0], self.epsilon_array[1]
+            H[0] += -self.omega_d_cav * a.dag() * a - self.omega_d_cav * b.dag() * b
+            H[0] += -1j * (b * eps_b - a * eps_a)
+            H[0] += 1j * (b.dag() * np.conj(eps_b) - a.dag() * np.conj(eps_a))
+            # if self.include_cr:
+            #     H += [[eps * a, lambda t, args: np.exp(-2 * 1j * self.omega_d_cav * t)], ]
+            #     H += [[np.conj(eps) * a.dag(), lambda t, args: np.exp(2 * 1j * self.omega_d_cav * t)], ]
+        else:
+            raise RuntimeError("only one or two cavities supported")
         return H
