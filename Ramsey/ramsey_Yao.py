@@ -42,7 +42,7 @@ class RamseyExperiment:
         rtol=1e-6,
         destructive_interference=False,
         interference_scale=1.0,
-
+        include_stark_shifts=False,
     ):
         assert len(omega_cavs) == len(chi_cavstmon) == len(kappa_cavs) == num_cavs
         self.interference = interference
@@ -66,6 +66,7 @@ class RamseyExperiment:
         self.rtol = rtol
         self.destructive_interference = destructive_interference
         self.interference_scale = interference_scale
+        self.include_stark_shifts = include_stark_shifts
         self.truncated_dims = num_cavs * [cavity_dim] + [tmon_dim]
 
     def tmon_ops(self):
@@ -117,6 +118,16 @@ class RamseyExperiment:
                     self.interference_scale * 24 * phi_a * phi_b * phi_q**2
                     * q.dag() * q * (a.dag() * b + b.dag() * a)
             )
+            if self.include_stark_shifts:
+                H0 += (-self.EJ / 24) * (
+                    12 * phi_a * phi_b * phi_q ** 2 * (a.dag() * b + b.dag() * a)
+                )
+                H0 += (-self.EJ / 24) * (
+                    12 * phi_a**2 * (phi_a**2 + phi_b**2 + phi_q**2) * a.dag() * a
+                )
+                H0 += (-self.EJ / 24) * (
+                    12 * phi_b**2 * (phi_a**2 + phi_b**2 + phi_q**2) * b.dag() * b
+                )
         return [
             H0,
         ]
