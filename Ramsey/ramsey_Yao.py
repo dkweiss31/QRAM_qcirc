@@ -3,6 +3,7 @@ import copy
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
+from quantum_utils import id_wrap_ops, construct_basis_states_list, write_to_h5
 from qutip import (
     destroy,
     mesolve,
@@ -10,12 +11,10 @@ from qutip import (
     qeye,
     tensor,
     basis,
-    expect
+    expect,
 )
 from scipy.constants import hbar, k
 from scipy.optimize import curve_fit
-
-from QRAM_utils.utils import id_wrap_ops, construct_basis_states_list, write_to_h5
 
 
 class RamseyExperiment:
@@ -42,7 +41,7 @@ class RamseyExperiment:
         rtol=1e-6,
         destructive_interference=False,
         interference_scale=1.0,
-        include_stark_shifts=False,
+        include_stark_shifts=True,
     ):
         assert len(omega_cavs) == len(chi_cavstmon) == len(kappa_cavs) == num_cavs
         self.interference = interference
@@ -177,9 +176,11 @@ class RamseyExperiment:
                 ],
                 self.truncated_dims,
             )
+        elif initial_state.isket:
+            initial_state = initial_state * initial_state.dag()
         H = self.hamiltonian()
         return self.mesolve_for_final_state(
-            H, initial_state * initial_state.dag(), self.thermal_time
+            H, initial_state, self.thermal_time
         )
 
     @staticmethod
@@ -241,13 +242,30 @@ class RamseyExperiment:
         print(expect(proj, result.final_state))
         return result.final_state
 
-    def readout_proj(self):
+    def initial_state(self, exp_type="ramsey"):
+        init_cav = self.num_cavs * [basis(self.cavity_dim, 0)]
+        if exp_type == "ramsey":
+            initial_state = tensor(
+                *init_cav,
+                (basis(self.tmon_dim, 0) + basis(self.tmon_dim, 1)).unit()
+            )
+        elif exp_type == "T1":
+            initial_state = tensor(
+                *init_cav,
+                basis(self.tmon_dim, 1)
+            )
+        else:
+            raise RuntimeError("gate type not supported")
+        return initial_state
+
+    def readout_proj(self, tmon_idx=0):
         op_list = self.num_cavs * [qeye(self.cavity_dim)] + [
-            basis(self.tmon_dim, 0) * basis(self.tmon_dim, 0).dag()
+            basis(self.tmon_dim, tmon_idx) * basis(self.tmon_dim, tmon_idx).dag()
         ]
         return tensor(*op_list)
 
-    def ramsey_experiment(self):
+    def decoherence_experiment(self, exp_type="ramsey"):
+        """type can be either 'ramsey' or 'T1'"""
         final_prob = np.zeros_like(self.delay_times)
         q = self.tmon_ops()
         thermal_state = self.obtain_thermal_state()
@@ -257,13 +275,16 @@ class RamseyExperiment:
         # Hamiltonian for pi/2 pulses
         H_with_drive = copy.deepcopy(H)
         H_with_drive[0] += 0.5 * self.tmon_drive_amp * (q + q.dag())
-        t_pi2 = np.pi / (2 * self.tmon_drive_amp)
-        # pi/2 pulses
+        if exp_type == "ramsey":
+            t_drive = np.pi / (2 * self.tmon_drive_amp)
+        elif exp_type == "T1":
+            t_drive = np.pi / self.tmon_drive_amp
+        # pi/2 or pi pulses
         state_after_prev_delay = self.mesolve_for_final_state(
-            H_with_drive, thermal_state, t_pi2
+            H_with_drive, thermal_state, t_drive
         )
         final_state = self.mesolve_for_final_state(
-            H_with_drive, state_after_prev_delay, t_pi2
+            H_with_drive, state_after_prev_delay, t_drive
         )
         final_prob[0] = np.real(np.trace(final_state * self.readout_proj()))
         delay_dif = self.delay_times[1] - self.delay_times[0]
@@ -274,7 +295,7 @@ class RamseyExperiment:
             )
             # final pi/2 pulse
             final_state = self.mesolve_for_final_state(
-                H_with_drive, state_after_delay, t_pi2
+                H_with_drive, state_after_delay, t_drive
             )
             state_after_prev_delay = state_after_delay
             final_prob[idx] = np.real(np.trace(final_state * self.readout_proj()))
@@ -291,20 +312,65 @@ class RamseyExperiment:
             plt.savefig(filename)
         plt.show()
 
-    def main_ramsey(self, filepath, p0=(6 * 10 ** 4, 0.045, 0.5, 0.5, -1.7)):
+    def plot_T1(self, ramsey_result, popt_T1, filename=None):
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.plot(self.delay_times, ramsey_result, "o")
+        plot_times = np.linspace(0.0, self.delay_times[-1], 2000)
+        ax.plot(plot_times, self.T1_func(plot_times, *popt_T1), linestyle="-")
+        ax.set_ylabel(r"$P(|1\rangle)$", fontsize=12)
+        ax.set_xlabel("time [ns]", fontsize=12)
+        if filename is not None:
+            plt.savefig(filename)
+        plt.show()
+
+    def main_ramsey(self, filepath, p0=(6 * 10 ** 4, 0.045, 0.5, 0.5, -1.7), exp_type="ramsey"):
+        print(f"Saving to filepath {filepath}. Running sim with params")
+        print(self.__dict__)
         naive_gamma_phi = sum(
             self.gamma_phi_full_func()
         )
-        ramsey_result = self.ramsey_experiment()
+        ramsey_result = self.decoherence_experiment(exp_type=exp_type)
         write_to_h5(filepath, {"ramsey_result": ramsey_result}, self.__dict__)
-        gamma_phi_indep, popt, pcov = self.extract_gammaphi(
-            ramsey_result, p0=p0
+        if exp_type == "ramsey":
+            gamma_phi, popt, pcov = self.extract_gammaphi(
+                ramsey_result, p0=p0
+            )
+            # write this separately in case the fit fails
+            with h5py.File(filepath, "a") as f:
+                written_data = f.create_dataset("gamma_phi", data=gamma_phi)
+            print(f"naive gamma_phi = {naive_gamma_phi}")
+            print(f"extracted gamma_phi = {gamma_phi}")
+            print(f"optimized parameters {popt}")
+        elif exp_type == "T1":
+            gamma_1, popt, pcov = self.extract_gamma1(
+                ramsey_result, p0=p0
+            )
+            # write this separately in case the fit fails
+            with h5py.File(filepath, "a") as f:
+                written_data = f.create_dataset("gamma_1", data=gamma_1)
+            print(f"extracted gamma_1 = {gamma_1}")
+            print(f"optimized parameters {popt}")
+
+    def extract_gamma1(
+        self,
+        ramsey_result,
+        window=None,
+        p0=(6 * 10 ** 4, 1.0, 0.0),
+        plot=True,
+    ):
+        if window is None:
+            window = (0, len(self.delay_times))
+        popt_T1, pcov_T1 = curve_fit(
+            self.T1_func,
+            self.delay_times[window[0]: window[1]],
+            ramsey_result[window[0]: window[1]],
+            p0=p0,
+            maxfev=6000,
+            bounds=((100, -2, -2), (10**15, 2, 2)),
         )
-        # write this separately in case the fit fails
-        with h5py.File(filepath, "a") as f:
-            written_data = f.create_dataset("gamma_phi", data=gamma_phi_indep)
-        print(f"naive gamma_phi = {naive_gamma_phi}")
-        print(f"indep gamma_phi = {gamma_phi_indep}")
+        if plot:
+            self.plot_T1(ramsey_result, popt_T1)
+        return (1 / popt_T1[0]) * 10**6 / (2 * np.pi), popt_T1, pcov_T1
 
     def extract_gammaphi(
         self,
