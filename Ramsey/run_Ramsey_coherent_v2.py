@@ -16,12 +16,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_pts", default=1, type=int, help="number of points in omega_d list"
     )
-    parser.add_argument("--exp_type", default="ramsey", type=str, help="experiment type")
+    parser.add_argument("--exp_type", default="T1", type=str, help="experiment type")
     parser.add_argument("--omega_d_vals", default="(3.4,3.4)", type=str, help="omega_d endpoint")
     parser.add_argument("--eps", default=0.01, type=float, help="drive strength in GHz")
-    parser.add_argument("--cav_dim", default=6, type=int, help="cavity dimension")
+    parser.add_argument("--cav_dim", default=7, type=int, help="cavity dimension")
     parser.add_argument("--num_cavs", default=1, type=int, help="number of cavities")
-    parser.add_argument("--delay_times", default="(0,2000,301)", type=str, help="delay times to scan over")
+    parser.add_argument("--delay_times", default="(0,100000,301)", type=str, help="delay times to scan over")
     parser.add_argument("--nsteps", default=200000, type=int, help="nsteps for mesolve")
     parser.add_argument("--temp", default=0.1, type=float, help="temperature")
     parser.add_argument("--destructive_interference", default=0, type=int, help="destructive interference")
@@ -45,11 +45,14 @@ if __name__ == "__main__":
     else:
         raise RuntimeError("only one or two cavities supported")
     omega_d_vals = eval(args.omega_d_vals)
+    delay_time_vals = eval(args.delay_times)
+    delay_times = np.linspace(delay_time_vals[0], delay_time_vals[1], delay_time_vals[2])
     omega_d_list = 2.0 * np.pi * np.linspace(omega_d_vals[0], omega_d_vals[1], args.num_pts)
     omega_d_cav = omega_d_list[args.idx]
     param_dict["omega_d_cav"] = omega_d_cav
     param_dict["epsilon_array"] = epsilon_array
     param_dict["cavity_dim"] = args.cav_dim
+    param_dict["delay_times"] = delay_times
     param_dict["nsteps"] = args.nsteps
     param_dict["thermal_time"] = args.thermal_time
     param_dict["temp"] = args.temp

@@ -269,7 +269,10 @@ class RamseyExperiment:
         final_prob = np.zeros_like(self.delay_times)
         q = self.tmon_ops()
         thermal_state = self.obtain_thermal_state()
-        H0_q = (self.omega_tmon - self.omega_d_tmon) * q.dag() * q
+        if exp_type == "T1":
+            H0_q = 0.0 * q.dag() * q
+        else:
+            H0_q = (self.omega_tmon - self.omega_d_tmon) * q.dag() * q
         H = self.hamiltonian()
         H[0] += H0_q
         # Hamiltonian for pi/2 pulses
