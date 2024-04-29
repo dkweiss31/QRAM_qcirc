@@ -25,6 +25,7 @@ if __name__ == "__main__":
     parser.add_argument("--nsteps", default=200000, type=int, help="nsteps for mesolve")
     parser.add_argument("--temp", default=0.1, type=float, help="temperature")
     parser.add_argument("--destructive_interference", default=0, type=int, help="destructive interference")
+    parser.add_argument("--interference_scale", default=1, type=int, help="scale of the chi_ab term")
     parser.add_argument("--include_stark_shifts", default=0, type=int, help="include stark shifts")
     parser.add_argument("--thermal_time", default=1000.0, type=float, help="time spent thermalizing")
     args = parser.parse_args()
@@ -58,6 +59,7 @@ if __name__ == "__main__":
     param_dict["temp"] = args.temp
     param_dict["destructive_interference"] = args.destructive_interference
     param_dict["include_stark_shifts"] = args.include_stark_shifts
+    param_dict["interference_scale"] = args.interference_scale
     if args.exp_type == "ramsey":
         p0 = (6 * 10 ** 4, 0.045, 0.5, 0.5, -1.7)
     elif args.exp_type == "T1":

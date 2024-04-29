@@ -278,18 +278,22 @@ class RamseyExperiment:
         # Hamiltonian for pi/2 pulses
         H_with_drive = copy.deepcopy(H)
         H_with_drive[0] += 0.5 * self.tmon_drive_amp * (q + q.dag())
-        if exp_type == "ramsey":
-            t_drive = np.pi / (2 * self.tmon_drive_amp)
-        elif exp_type == "T1":
-            t_drive = np.pi / self.tmon_drive_amp
+        readout = self.readout_proj()
+        t_drive = np.pi / (2 * self.tmon_drive_amp)
         # pi/2 or pi pulses
         state_after_prev_delay = self.mesolve_for_final_state(
             H_with_drive, thermal_state, t_drive
         )
+        # if exp_type == "ramsey":
+        #     final_state = self.mesolve_for_final_state(
+        #         H_with_drive, state_after_prev_delay, t_drive
+        #     )
+        # elif exp_type == "T1":
+        #     final_state = state_after_prev_delay
         final_state = self.mesolve_for_final_state(
             H_with_drive, state_after_prev_delay, t_drive
         )
-        final_prob[0] = np.real(np.trace(final_state * self.readout_proj()))
+        final_prob[0] = np.real(np.trace(final_state * readout))
         delay_dif = self.delay_times[1] - self.delay_times[0]
         for idx in range(1, len(self.delay_times)):
             # run the delay
@@ -297,11 +301,17 @@ class RamseyExperiment:
                 H, state_after_prev_delay, delay_dif
             )
             # final pi/2 pulse
+            # if exp_type == "ramsey":
+            #     final_state = self.mesolve_for_final_state(
+            #         H_with_drive, state_after_delay, t_drive
+            #     )
+            # elif exp_type == "T1":
+            #     final_state = state_after_delay
             final_state = self.mesolve_for_final_state(
                 H_with_drive, state_after_delay, t_drive
             )
             state_after_prev_delay = state_after_delay
-            final_prob[idx] = np.real(np.trace(final_state * self.readout_proj()))
+            final_prob[idx] = np.real(np.trace(final_state * readout))
         return final_prob
 
     def plot_ramsey(self, ramsey_result, popt_T2, filename=None):

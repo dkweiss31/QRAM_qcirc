@@ -22,6 +22,7 @@ nsteps=200000
 temp=0.1
 destructive_interference=0
 include_stark_shifts=0
+interference_scale=1
 thermal_time=1000.0
 ######
 
@@ -41,5 +42,6 @@ python run_Ramsey_coherent_v2.py \
  --nsteps=$nsteps \
  --temp=$temp \
  --destructive_interference=$destructive_interference \
+ --interference_scale=$interference_scale \
  --include_stark_shifts=$include_stark_shifts \
  --thermal_time=$thermal_time
