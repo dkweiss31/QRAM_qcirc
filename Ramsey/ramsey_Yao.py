@@ -12,6 +12,8 @@ from qutip import (
     tensor,
     basis,
     expect,
+    spre,
+    spost,
 )
 from scipy.constants import hbar, k
 from scipy.optimize import curve_fit
@@ -39,7 +41,7 @@ class RamseyExperiment:
         nsteps=1000,
         atol=1e-8,
         rtol=1e-6,
-        destructive_interference=False,
+        destructive_interference=1,
         interference_scale=1.0,
         include_stark_shifts=True,
     ):
@@ -82,6 +84,7 @@ class RamseyExperiment:
         return annihilation_ops_list
 
     def nths(self):
+        # omegas = np.array(len(self.omega_cavs) * [np.max(self.omega_cavs) + 0.2 * 2.0 * np.pi])
         return 1.0 / (np.exp(hbar * self.omega_cavs * 10**9 / (k * self.temp)) - 1)
 
     def phi_cav(self, idx=0):
@@ -131,6 +134,14 @@ class RamseyExperiment:
             H0,
         ]
 
+    @staticmethod
+    def xinyuan_dissipator(a, b=None):
+        if b is None:
+            b = a
+        D = (0.5 * spre(a) * spost(b.dag()) + 0.5 * spre(b) * spost(a.dag())
+             - 0.5 * spre(b.dag() * a) - 0.5 * spost(a.dag() * b))
+        return D
+
     def construct_c_ops_interference(self):
         a_ops = self.annihilation_ops()
         if len(a_ops) == 1:
@@ -138,15 +149,37 @@ class RamseyExperiment:
         elif len(a_ops) == 2:
             kappa_cavs = self.kappa_cavs
             nths = self.nths()
-            if self.destructive_interference:
-                coeff = -1
-            else:
-                coeff = 1
-            lowering = (np.sqrt(kappa_cavs[0] * (1 + nths[0])) * a_ops[0]
-                        - coeff * np.sqrt(kappa_cavs[1] * (1 + nths[1])) * a_ops[1])
-            raising = (np.sqrt(kappa_cavs[0] * nths[0]) * a_ops[0].dag()
-                       - coeff * np.sqrt(kappa_cavs[1] * nths[1]) * a_ops[1].dag())
-            return [lowering, raising]
+            kappa_a, kappa_b = kappa_cavs[0], kappa_cavs[1]
+            # u = 1. / np.sqrt(2)  # np.sqrt(kappa_a / (kappa_a + kappa_b))
+            # v = 1. / np.sqrt(2)  # np.sqrt(1 - u ** 2)
+            # nth = 0.21
+            # c_ops = np.sum(kappa_cavs) * (
+            #     (1 + ntha) * self.xinyuan_dissipator(u * a, u * a)
+            #     + (1 + nthb) * self.xinyuan_dissipator(v * b, v * b)
+            #     - (1 + ntha) * self.xinyuan_dissipator(u * a, v * b)
+            #     - (1 + nthb) * self.xinyuan_dissipator(v * b, u * a)
+            #     + ntha * self.xinyuan_dissipator(u * a.dag(), u * a.dag())
+            #     + nthb * self.xinyuan_dissipator(v * b.dag(), v * b.dag())
+            #     - ntha * self.xinyuan_dissipator(u * a.dag(), v * b.dag())
+            #     - nthb * self.xinyuan_dissipator(v * b.dag(), u * a.dag())
+            # )
+            # return c_ops
+            # lowering = np.sqrt(np.sum(kappa_cavs) * (1 + nth)) * (
+            #         u * a_ops[0] - self.destructive_interference * v * a_ops[1]
+            # )
+            # raising = np.sqrt(np.sum(kappa_cavs) * nth) * (
+            #         u * a_ops[0].dag() - self.destructive_interference * v * a_ops[1].dag()
+            # )
+            lowering_1 = (np.sqrt(kappa_cavs[0] * (1 + nths[0])) * a_ops[0]
+                        - self.destructive_interference * np.sqrt(kappa_cavs[1] * (1 + nths[1])) * a_ops[1])
+            raising_1 = (np.sqrt(kappa_cavs[0] * nths[0]) * a_ops[0].dag()
+                       - self.destructive_interference * np.sqrt(kappa_cavs[1] * nths[1]) * a_ops[1].dag())
+            return [lowering_1, raising_1]
+            # lowering_2 = (np.sqrt(kappa_cavs[0] * (1 + nths[0])) * a_ops[0]
+            #                     - self.destructive_interference * np.sqrt(kappa_cavs[1] * (1 + nths[1])) * a_ops[1])
+            # raising_2 = (np.sqrt(kappa_cavs[0] * nths[0]) * a_ops[0].dag()
+            #                    - self.destructive_interference * np.sqrt(kappa_cavs[1] * nths[1]) * a_ops[1].dag())
+            # return [lowering_1, lowering_2, raising_1, raising_2]
         else:
             raise RuntimeError("more than two cavities not supported")
 
@@ -239,7 +272,8 @@ class RamseyExperiment:
             * basis(self.cavity_dim, self.cavity_dim - 1).dag()
         )
         proj = id_wrap_ops(highest_state_proj, 0, self.truncated_dims)
-        print(expect(proj, result.final_state))
+        print("occupation of highest state at final time: ", expect(proj, result.final_state))
+        print("expectation value of n_1: ", np.max(result.expect[0]))
         return result.final_state
 
     def initial_state(self, exp_type="ramsey"):
@@ -404,6 +438,9 @@ class RamseyExperiment:
         )
         if plot:
             self.plot_ramsey(ramsey_result, popt_T2)
+        print("popt: ", popt_T2)
+        print("pcov: ", pcov_T2)
+        print("condition_num: ", np.linalg.cond(pcov_T2))
         return (1 / popt_T2[0]) * 10**6 / (2 * np.pi), popt_T2, pcov_T2
 
 

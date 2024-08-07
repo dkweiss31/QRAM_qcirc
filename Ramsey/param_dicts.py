@@ -31,7 +31,7 @@ param_dict_2 = {
     "temp": 1e-8,
     "EJ": EJ,
     "alpha": alpha,
-    "destructive_interference": False,
+    "destructive_interference": 1.0,
     "include_cr": False,
 }
 
