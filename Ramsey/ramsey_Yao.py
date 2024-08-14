@@ -3,6 +3,7 @@ import copy
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy as sp
 from quantum_utils import id_wrap_ops, construct_basis_states_list, write_to_h5
 from qutip import (
     destroy,
@@ -37,6 +38,7 @@ class RamseyExperiment:
         thermal_time=200.0,
         delay_times=np.linspace(0.0, 2000, 301),
         omega_d_tmon=2.0 * np.pi * (5.7423 - 0.0071),
+        omega_d_cav: float = 2.0 * np.pi * 4.5,
         tmon_drive_amp: float = 2.0 * np.pi * 0.01,
         nsteps=1000,
         atol=1e-8,
@@ -61,6 +63,7 @@ class RamseyExperiment:
         self.thermal_time = thermal_time
         self.delay_times = delay_times
         self.omega_d_tmon = omega_d_tmon
+        self.omega_d_cav = omega_d_cav
         self.tmon_drive_amp = tmon_drive_amp
         self.nsteps = nsteps
         self.atol = atol
@@ -93,13 +96,108 @@ class RamseyExperiment:
     def phi_q(self):
         return (2 * np.abs(self.alpha) / self.EJ)**(1/4)
 
-    def hamiltonian(self):
+    def quadratic_term(self, phi_list, a_op_list):
+        assert len(phi_list) == len(a_op_list)
+        H = 0.0 * a_op_list[0]
+        for phi, a_op in zip(phi_list, a_op_list):
+            H += phi**2 * a_op.dag() * a_op
+            cr_term = 0.5 * phi**2 * a_op ** 2
+            H += cr_term + cr_term.dag()
+        for idx_a, (phi_a, a_op) in enumerate(zip(phi_list, a_op_list)):
+            for idx_b, (phi_b, b_op) in enumerate(zip(phi_list, a_op_list)):
+                if idx_b > idx_a:
+                    pref = 0.5 * phi_a * phi_b
+                    nonrot_term = pref * a_op * b_op.dag()
+                    cr_term = pref * a_op * b_op
+                    H += nonrot_term + nonrot_term.dag()
+                    H += cr_term + cr_term.dag()
+        return H
+
+    def cos_normal_ordered(self, phi, a_op):
+        dim = a_op.shape[0]
+        H = 0.0 * a_op
+        overall_pref = np.exp(-0.5 * phi**2)
+        for n in range(dim):
+            for m in range(dim):
+                if (n + m) % 2 == 0:
+                    pref = ((-phi**2)**((n + m) / 2)
+                            / sp.special.factorial(n)
+                            / sp.special.factorial(m)
+                            )
+                    H += overall_pref * pref * a_op.dag() ** n * a_op ** m
+        return H
+
+    def sin_normal_ordered(self, phi, a_op):
+        dim = a_op.shape[0]
+        H = 0.0 * a_op
+        overall_pref = np.exp(-0.5 * phi ** 2) * phi
+        for n in range(dim):
+            for m in range(dim):
+                if (n + m) % 2 == 1:
+                    pref = ((-phi ** 2) ** ((n + m - 1) / 2)
+                            / sp.special.factorial(n)
+                            / sp.special.factorial(m)
+                            )
+                    H += overall_pref * pref * a_op.dag() ** n * a_op ** m
+        return H
+
+    def hamiltonian_full(self):
         a_ops = self.annihilation_ops()
         q = self.tmon_ops()
         H0 = sum(
             omega * a_op.dag() * a_op
             for (omega, a_op) in zip(self.omega_cavs, self.annihilation_ops())
         )
+        H0 += self.omega_tmon * q.dag() * q
+        if len(a_ops) == 1:
+            phi_a, phi_q = self.phi_cav(0), self.phi_q()
+            H0 += (-self.EJ
+                   * (self.cos_normal_ordered(phi_a, a_ops[0])
+                     * self.cos_normal_ordered(phi_q, q)
+                      - self.sin_normal_ordered(phi_a, a_ops[0])
+                        * self.sin_normal_ordered(phi_q, q)
+                      )
+                   )
+            H0 += -self.EJ * self.quadratic_term([phi_a, phi_q], [a_ops[0], q])
+        elif len(a_ops) == 2:
+            a, b = a_ops[0], a_ops[1]
+            phi_a, phi_b, phi_q = self.phi_cav(0), self.phi_cav(1), self.phi_q()
+            term_1 = -self.EJ * (
+                self.cos_normal_ordered(phi_a, a)
+                * self.cos_normal_ordered(phi_b, b)
+                * self.cos_normal_ordered(phi_q, q)
+            )
+            term_2 = self.EJ * (
+                self.cos_normal_ordered(phi_a, a)
+                * self.sin_normal_ordered(phi_b, b)
+                * self.sin_normal_ordered(phi_q, q)
+            )
+            term_3 = self.EJ * (
+                    self.sin_normal_ordered(phi_a, a)
+                    * self.cos_normal_ordered(phi_b, b)
+                    * self.sin_normal_ordered(phi_q, q)
+            )
+            term_4 = self.EJ * (
+                    self.sin_normal_ordered(phi_a, a)
+                    * self.sin_normal_ordered(phi_b, b)
+                    * self.cos_normal_ordered(phi_q, q)
+            )
+            harm_term = -self.EJ * self.quadratic_term(
+                [phi_a, phi_b, phi_q], [a, b, q]
+            )
+            H0 += term_1 + term_2 + term_3 + term_4 + harm_term
+        else:
+            raise ValueError("a_ops can have one or two operators")
+        return [H0,]
+
+    def hamiltonian(self):
+        a_ops = self.annihilation_ops()
+        q = self.tmon_ops()
+        H0 = sum(
+            (omega - self.omega_d_cav) * a_op.dag() * a_op
+            for (omega, a_op) in zip(self.omega_cavs, self.annihilation_ops())
+        )
+        H0 += (self.omega_tmon - self.omega_d_tmon) * q.dag() * q
         for idx, a_op in enumerate(a_ops):
             H0 += self.chi_cavstmon[idx] * a_op.dag() * a_op * q.dag() * q
         if len(a_ops) == 1:
@@ -149,37 +247,11 @@ class RamseyExperiment:
         elif len(a_ops) == 2:
             kappa_cavs = self.kappa_cavs
             nths = self.nths()
-            kappa_a, kappa_b = kappa_cavs[0], kappa_cavs[1]
-            # u = 1. / np.sqrt(2)  # np.sqrt(kappa_a / (kappa_a + kappa_b))
-            # v = 1. / np.sqrt(2)  # np.sqrt(1 - u ** 2)
-            # nth = 0.21
-            # c_ops = np.sum(kappa_cavs) * (
-            #     (1 + ntha) * self.xinyuan_dissipator(u * a, u * a)
-            #     + (1 + nthb) * self.xinyuan_dissipator(v * b, v * b)
-            #     - (1 + ntha) * self.xinyuan_dissipator(u * a, v * b)
-            #     - (1 + nthb) * self.xinyuan_dissipator(v * b, u * a)
-            #     + ntha * self.xinyuan_dissipator(u * a.dag(), u * a.dag())
-            #     + nthb * self.xinyuan_dissipator(v * b.dag(), v * b.dag())
-            #     - ntha * self.xinyuan_dissipator(u * a.dag(), v * b.dag())
-            #     - nthb * self.xinyuan_dissipator(v * b.dag(), u * a.dag())
-            # )
-            # return c_ops
-            # lowering = np.sqrt(np.sum(kappa_cavs) * (1 + nth)) * (
-            #         u * a_ops[0] - self.destructive_interference * v * a_ops[1]
-            # )
-            # raising = np.sqrt(np.sum(kappa_cavs) * nth) * (
-            #         u * a_ops[0].dag() - self.destructive_interference * v * a_ops[1].dag()
-            # )
             lowering_1 = (np.sqrt(kappa_cavs[0] * (1 + nths[0])) * a_ops[0]
                         - self.destructive_interference * np.sqrt(kappa_cavs[1] * (1 + nths[1])) * a_ops[1])
             raising_1 = (np.sqrt(kappa_cavs[0] * nths[0]) * a_ops[0].dag()
                        - self.destructive_interference * np.sqrt(kappa_cavs[1] * nths[1]) * a_ops[1].dag())
             return [lowering_1, raising_1]
-            # lowering_2 = (np.sqrt(kappa_cavs[0] * (1 + nths[0])) * a_ops[0]
-            #                     - self.destructive_interference * np.sqrt(kappa_cavs[1] * (1 + nths[1])) * a_ops[1])
-            # raising_2 = (np.sqrt(kappa_cavs[0] * nths[0]) * a_ops[0].dag()
-            #                    - self.destructive_interference * np.sqrt(kappa_cavs[1] * nths[1]) * a_ops[1].dag())
-            # return [lowering_1, lowering_2, raising_1, raising_2]
         else:
             raise RuntimeError("more than two cavities not supported")
 
@@ -298,32 +370,28 @@ class RamseyExperiment:
         ]
         return tensor(*op_list)
 
-    def decoherence_experiment(self, exp_type="ramsey"):
-        """type can be either 'ramsey' or 'T1'"""
+    def decoherence_experiment(self, full_cosine=False):
         final_prob = np.zeros_like(self.delay_times)
         q = self.tmon_ops()
         thermal_state = self.obtain_thermal_state()
-        if exp_type == "T1":
-            H0_q = 0.0 * q.dag() * q
+        if full_cosine:
+            H = self.hamiltonian_full()
+            H_with_drive = copy.deepcopy(H)
+            H_with_drive += [[
+                self.tmon_drive_amp * (q + q.dag()),
+                lambda t, a: np.cos(self.omega_d_tmon * t)
+            ]]
         else:
-            H0_q = (self.omega_tmon - self.omega_d_tmon) * q.dag() * q
-        H = self.hamiltonian()
-        H[0] += H0_q
-        # Hamiltonian for pi/2 pulses
-        H_with_drive = copy.deepcopy(H)
-        H_with_drive[0] += 0.5 * self.tmon_drive_amp * (q + q.dag())
+            H = self.hamiltonian()
+            # Hamiltonian for pi/2 pulses
+            H_with_drive = copy.deepcopy(H)
+            H_with_drive[0] += 0.5 * self.tmon_drive_amp * (q + q.dag())
         readout = self.readout_proj()
         t_drive = np.pi / (2 * self.tmon_drive_amp)
         # pi/2 or pi pulses
         state_after_prev_delay = self.mesolve_for_final_state(
             H_with_drive, thermal_state, t_drive
         )
-        # if exp_type == "ramsey":
-        #     final_state = self.mesolve_for_final_state(
-        #         H_with_drive, state_after_prev_delay, t_drive
-        #     )
-        # elif exp_type == "T1":
-        #     final_state = state_after_prev_delay
         final_state = self.mesolve_for_final_state(
             H_with_drive, state_after_prev_delay, t_drive
         )
@@ -334,13 +402,6 @@ class RamseyExperiment:
             state_after_delay = self.mesolve_for_final_state(
                 H, state_after_prev_delay, delay_dif
             )
-            # final pi/2 pulse
-            # if exp_type == "ramsey":
-            #     final_state = self.mesolve_for_final_state(
-            #         H_with_drive, state_after_delay, t_drive
-            #     )
-            # elif exp_type == "T1":
-            #     final_state = state_after_delay
             final_state = self.mesolve_for_final_state(
                 H_with_drive, state_after_delay, t_drive
             )
@@ -370,33 +431,25 @@ class RamseyExperiment:
             plt.savefig(filename)
         plt.show()
 
-    def main_ramsey(self, filepath, p0=(6 * 10 ** 4, 0.045, 0.5, 0.5, -1.7), exp_type="ramsey"):
+    def main_ramsey(
+            self, filepath, p0=(6 * 10 ** 4, 0.045, 0.5, 0.5, -1.7), full_cosine=False
+    ):
         print(f"Saving to filepath {filepath}. Running sim with params")
         print(self.__dict__)
         naive_gamma_phi = sum(
             self.gamma_phi_full_func()
         )
-        ramsey_result = self.decoherence_experiment(exp_type=exp_type)
+        ramsey_result = self.decoherence_experiment(full_cosine=full_cosine)
         write_to_h5(filepath, {"ramsey_result": ramsey_result}, self.__dict__)
-        if exp_type == "ramsey":
-            gamma_phi, popt, pcov = self.extract_gammaphi(
-                ramsey_result, p0=p0
-            )
-            # write this separately in case the fit fails
-            with h5py.File(filepath, "a") as f:
-                written_data = f.create_dataset("gamma_phi", data=gamma_phi)
-            print(f"naive gamma_phi = {naive_gamma_phi}")
-            print(f"extracted gamma_phi = {gamma_phi}")
-            print(f"optimized parameters {popt}")
-        elif exp_type == "T1":
-            gamma_1, popt, pcov = self.extract_gamma1(
-                ramsey_result, p0=p0
-            )
-            # write this separately in case the fit fails
-            with h5py.File(filepath, "a") as f:
-                written_data = f.create_dataset("gamma_1", data=gamma_1)
-            print(f"extracted gamma_1 = {gamma_1}")
-            print(f"optimized parameters {popt}")
+        gamma_phi, popt, pcov = self.extract_gammaphi(
+            ramsey_result, p0=p0
+        )
+        # write this separately in case the fit fails
+        with h5py.File(filepath, "a") as f:
+            written_data = f.create_dataset("gamma_phi", data=gamma_phi)
+        print(f"naive gamma_phi = {naive_gamma_phi}")
+        print(f"extracted gamma_phi = {gamma_phi}")
+        print(f"optimized parameters {popt}")
 
     def extract_gamma1(
         self,
@@ -447,15 +500,31 @@ class RamseyExperiment:
 class CoherentDephasing(RamseyExperiment):
     def __init__(
         self,
-        omega_d_cav=2.0 * np.pi * 3.0,
         epsilon_array=(2.0 * np.pi * 0.001,),
         include_cr=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.omega_d_cav = omega_d_cav
         self.epsilon_array = epsilon_array
         self.include_cr = include_cr
+
+    def hamiltonian_full(self):
+        H = super().hamiltonian_full()
+        a_ops = self.annihilation_ops()
+        a = a_ops[0]
+        eps_a = self.epsilon_array[0]
+        H += [[
+            2.0 * (eps_a * a + np.conj(eps_a) * a.dag()),
+            lambda t, args: np.cos(self.omega_d_cav * t)
+        ]]
+        if len(a_ops) == 2:
+            a, b = a_ops[0], a_ops[1]
+            eps_a, eps_b = self.epsilon_array[0], self.epsilon_array[1]
+            H += [[
+                2.0 * (eps_b * b + np.conj(eps_b) * b.dag()),
+                lambda t, args: np.cos(self.omega_d_cav * t)
+            ]]
+        return H
 
     def hamiltonian(self):
         H = super().hamiltonian()
@@ -463,12 +532,10 @@ class CoherentDephasing(RamseyExperiment):
         if len(a_ops) == 1:
             a = a_ops[0]
             eps = self.epsilon_array[0]
-            H[0] += -self.omega_d_cav * a.dag() * a
             H[0] += eps * a + np.conj(eps) * a.dag()
         elif len(a_ops) == 2:
             a, b = a_ops[0], a_ops[1]
             eps_a, eps_b = self.epsilon_array[0], self.epsilon_array[1]
-            H[0] += -self.omega_d_cav * a.dag() * a - self.omega_d_cav * b.dag() * b
             H[0] += -1j * (b * eps_b - a * eps_a)
             H[0] += 1j * (b.dag() * np.conj(eps_b) - a.dag() * np.conj(eps_a))
             # if self.include_cr:

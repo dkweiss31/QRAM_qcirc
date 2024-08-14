@@ -21,7 +21,7 @@ if __name__ == "__main__":
     parser.add_argument("--omega_d_vals", default="(3.3261,3.3261)", type=str, help="omega_d endpoint")
     parser.add_argument("--eps", default=0.01, type=float, help="drive strength in GHz")
     parser.add_argument("--cav_dim", default=7, type=int, help="cavity dimension")
-    parser.add_argument("--num_cavs", default=2, type=int, help="number of cavities")
+    parser.add_argument("--num_cavs", default=1, type=int, help="number of cavities")
     # parser.add_argument("--delay_times", default="(0,32000,4801)", type=str, help="delay times to scan over")
     parser.add_argument("--delay_times", default="(0,2000,301)", type=str, help="delay times to scan over")
     parser.add_argument("--nsteps", default=200000, type=int, help="nsteps for mesolve")
@@ -30,6 +30,7 @@ if __name__ == "__main__":
     parser.add_argument("--interference_scale", default=1, type=int, help="scale of the chi_ab term")
     parser.add_argument("--include_stark_shifts", default=0, type=int, help="include stark shifts")
     parser.add_argument("--thermal_time", default=1000.0, type=float, help="time spent thermalizing")
+    parser.add_argument("--full_cosine", default=False, type=bool, help="full cosine or not")
     args = parser.parse_args()
     if args.idx != -1:
         filepath = f"out/{str(args.idx).zfill(5)}_cohere_Ramsey.h5py"
@@ -79,4 +80,4 @@ if __name__ == "__main__":
     else:
         raise RuntimeError("unsupported experiment type")
     ramsey_coherent = CoherentDephasing(**param_dict)
-    ramsey_coherent.main_ramsey(filepath, p0, exp_type=args.exp_type)
+    ramsey_coherent.main_ramsey(filepath, p0, full_cosine=args.full_cosine)
