@@ -143,10 +143,9 @@ class RamseyExperiment:
         if len(a_ops) == 1:
             phi_a, phi_q = self.phi_cav(0), self.phi_q()
             H0 += (-self.EJ
-                   * (self.cos_normal_ordered(phi_a, a_ops[0])
-                      @ self.cos_normal_ordered(phi_q, q)
+                   * (self.cos_normal_ordered(phi_a, a_ops[0]) * np.cos(phi_q)
                       - self.sin_normal_ordered(phi_a, a_ops[0])
-                      @ self.sin_normal_ordered(phi_q, q)
+                      @ (np.sin(phi_q) * (q + dq.dag(q)))
                       )
                    )
             H0 += -self.EJ * self.quadratic_term([phi_a, phi_q], [a_ops[0], q])
@@ -156,22 +155,22 @@ class RamseyExperiment:
             term_1 = -self.EJ * (
                 self.cos_normal_ordered(phi_a, a)
                 @ self.cos_normal_ordered(phi_b, b)
-                @ self.cos_normal_ordered(phi_q, q)
+                * np.cos(phi_q)
             )
             term_2 = self.EJ * (
                 self.cos_normal_ordered(phi_a, a)
                 @ self.sin_normal_ordered(phi_b, b)
-                @ self.sin_normal_ordered(phi_q, q)
+                @ (np.sin(phi_q) * (q + dq.dag(q)))
             )
             term_3 = self.EJ * (
                     self.sin_normal_ordered(phi_a, a)
                     @ self.cos_normal_ordered(phi_b, b)
-                    @ self.sin_normal_ordered(phi_q, q)
+                    @ (np.sin(phi_q) * (q + dq.dag(q)))
             )
             term_4 = self.EJ * (
                     self.sin_normal_ordered(phi_a, a)
                     @ self.sin_normal_ordered(phi_b, b)
-                    @ self.cos_normal_ordered(phi_q, q)
+                    * np.cos(phi_q)
             )
             harm_term = -self.EJ * self.quadratic_term(
                 [phi_a, phi_b, phi_q], [a, b, q]
