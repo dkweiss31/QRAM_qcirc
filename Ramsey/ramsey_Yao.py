@@ -2,9 +2,11 @@ import copy
 
 import dynamiqs as dq
 import h5py
+import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
+from dynamiqs.solver import Tsit5, Expm
 from quantum_utils import write_to_h5
 from scipy.constants import hbar, k
 from scipy.optimize import curve_fit
@@ -63,17 +65,23 @@ class RamseyExperiment:
 
     def tmon_ops(self):
         ids = self.num_cavs * [dq.eye(self.cavity_dim)]
-        q = dq.tensor(dq.destroy(2), *ids)
+        q = dq.tensor(*ids, dq.destroy(2))
         return q
 
     def annihilation_ops(self):
         if self.num_cavs == 1:
-            return [dq.tensor(dq.eye(2), dq.destroy(self.cavity_dim)),]
+            return [dq.tensor(dq.destroy(self.cavity_dim), dq.eye(2)), ]
         elif self.num_cavs == 2:
-            return [dq.tensor(dq.eye(2), dq.destroy(self.cavity_dim), dq.eye(self.cavity_dim)),
-                    dq.tensor(dq.eye(2), dq.eye(self.cavity_dim), dq.destroy(self.cavity_dim))]
+            return [dq.tensor(dq.destroy(self.cavity_dim), dq.eye(self.cavity_dim), dq.eye(2)),
+                    dq.tensor(dq.eye(self.cavity_dim), dq.destroy(self.cavity_dim), dq.eye(2))]
         else:
             raise ValueError("number of cavities needs to be 1 or 2")
+
+    def bare_labels(self):
+        return np.array(list(np.ndindex(*self.truncated_dims)))
+
+    def rotating_frame_frequencies(self):
+        return self.num_cavs * [self.omega_d_cav] + [self.omega_d_tmon]
 
     def nths(self):
         # omegas = np.array(len(self.omega_cavs) * [np.max(self.omega_cavs) + 0.2 * 2.0 * np.pi])
@@ -89,21 +97,19 @@ class RamseyExperiment:
         assert len(phi_list) == len(a_op_list)
         H = 0.0 * a_op_list[0]
         for phi, a_op in zip(phi_list, a_op_list):
-            H += phi**2 * a_op.dag() * a_op
-            cr_term = 0.5 * phi**2 * a_op ** 2
-            H += cr_term + cr_term.dag()
+            H += phi**2 * dq.dag(a_op) @ a_op
+            cr_term = 0.5 * phi**2 * dq.powm(a_op, 2)
+            H += cr_term + dq.dag(cr_term)
         for idx_a, (phi_a, a_op) in enumerate(zip(phi_list, a_op_list)):
             for idx_b, (phi_b, b_op) in enumerate(zip(phi_list, a_op_list)):
                 if idx_b > idx_a:
                     pref = 0.5 * phi_a * phi_b
-                    nonrot_term = pref * a_op * b_op.dag()
-                    cr_term = pref * a_op * b_op
-                    H += nonrot_term + nonrot_term.dag()
-                    H += cr_term + cr_term.dag()
+                    term = pref * (a_op @ dq.dag(b_op) + a_op @ b_op)
+                    H += term + dq.dag(term)
         return H
 
     def cos_normal_ordered(self, phi, a_op):
-        dim = a_op.shape[0]
+        dim = a_op.shape[0] + 1
         H = 0.0 * a_op
         overall_pref = np.exp(-0.5 * phi**2)
         for n in range(dim):
@@ -113,11 +119,11 @@ class RamseyExperiment:
                             / sp.special.factorial(n)
                             / sp.special.factorial(m)
                             )
-                    H += overall_pref * pref * a_op.dag() ** n * a_op ** m
+                    H += overall_pref * pref * dq.powm(dq.dag(a_op), n) @ dq.powm(a_op, m)
         return H
 
     def sin_normal_ordered(self, phi, a_op):
-        dim = a_op.shape[0]
+        dim = a_op.shape[0] + 1
         H = 0.0 * a_op
         overall_pref = np.exp(-0.5 * phi ** 2) * phi
         for n in range(dim):
@@ -127,24 +133,20 @@ class RamseyExperiment:
                             / sp.special.factorial(n)
                             / sp.special.factorial(m)
                             )
-                    H += overall_pref * pref * a_op.dag() ** n * a_op ** m
+                    H += overall_pref * pref * dq.powm(dq.dag(a_op), n) @ dq.powm(a_op, m)
         return H
 
     def hamiltonian_full(self):
         a_ops = self.annihilation_ops()
         q = self.tmon_ops()
-        H0 = sum(
-            omega * a_op.dag() * a_op
-            for (omega, a_op) in zip(self.omega_cavs, self.annihilation_ops())
-        )
-        H0 += self.omega_tmon * q.dag() * q
+        H0 = self._static_hamiltonian()
         if len(a_ops) == 1:
             phi_a, phi_q = self.phi_cav(0), self.phi_q()
             H0 += (-self.EJ
                    * (self.cos_normal_ordered(phi_a, a_ops[0])
-                     * self.cos_normal_ordered(phi_q, q)
+                      @ self.cos_normal_ordered(phi_q, q)
                       - self.sin_normal_ordered(phi_a, a_ops[0])
-                        * self.sin_normal_ordered(phi_q, q)
+                      @ self.sin_normal_ordered(phi_q, q)
                       )
                    )
             H0 += -self.EJ * self.quadratic_term([phi_a, phi_q], [a_ops[0], q])
@@ -153,23 +155,23 @@ class RamseyExperiment:
             phi_a, phi_b, phi_q = self.phi_cav(0), self.phi_cav(1), self.phi_q()
             term_1 = -self.EJ * (
                 self.cos_normal_ordered(phi_a, a)
-                * self.cos_normal_ordered(phi_b, b)
-                * self.cos_normal_ordered(phi_q, q)
+                @ self.cos_normal_ordered(phi_b, b)
+                @ self.cos_normal_ordered(phi_q, q)
             )
             term_2 = self.EJ * (
                 self.cos_normal_ordered(phi_a, a)
-                * self.sin_normal_ordered(phi_b, b)
-                * self.sin_normal_ordered(phi_q, q)
+                @ self.sin_normal_ordered(phi_b, b)
+                @ self.sin_normal_ordered(phi_q, q)
             )
             term_3 = self.EJ * (
                     self.sin_normal_ordered(phi_a, a)
-                    * self.cos_normal_ordered(phi_b, b)
-                    * self.sin_normal_ordered(phi_q, q)
+                    @ self.cos_normal_ordered(phi_b, b)
+                    @ self.sin_normal_ordered(phi_q, q)
             )
             term_4 = self.EJ * (
                     self.sin_normal_ordered(phi_a, a)
-                    * self.sin_normal_ordered(phi_b, b)
-                    * self.cos_normal_ordered(phi_q, q)
+                    @ self.sin_normal_ordered(phi_b, b)
+                    @ self.cos_normal_ordered(phi_q, q)
             )
             harm_term = -self.EJ * self.quadratic_term(
                 [phi_a, phi_b, phi_q], [a, b, q]
@@ -177,16 +179,22 @@ class RamseyExperiment:
             H0 += term_1 + term_2 + term_3 + term_4 + harm_term
         else:
             raise ValueError("a_ops can have one or two operators")
-        return [H0,]
+        bare_labels = self.bare_labels()
+        omega_ds = self.rotating_frame_frequencies()
+        rot_frame_diag = np.einsum("nj,j->n", bare_labels, omega_ds)
+        rot_frame = np.reshape(rot_frame_diag, (-1, 1)) - rot_frame_diag
+        H0 = H0 - H0[0, 0] * dq.eye(*self.truncated_dims)
+        H0 = jnp.where(
+            jnp.abs(rot_frame) > 2.0 * np.pi * 0.0, 0.0, H0
+        )
+        # note elementwise multiplication below
+        H = dq.timecallable(lambda t: jnp.exp(1j * t * rot_frame) * H0)
+        return H
 
     def hamiltonian(self):
         a_ops = self.annihilation_ops()
         q = self.tmon_ops()
-        H0 = sum(
-            (omega - self.omega_d_cav) * dq.dag(a_op) @ a_op
-            for (omega, a_op) in zip(self.omega_cavs, self.annihilation_ops())
-        )
-        H0 += (self.omega_tmon - self.omega_d_tmon) * dq.dag(q) @ q
+        H0 = self._static_hamiltonian()
         for idx, a_op in enumerate(a_ops):
             H0 += self.chi_cavstmon[idx] * dq.dag(a_op) @ a_op @ dq.dag(q) @ q
         if len(a_ops) == 1:
@@ -209,6 +217,16 @@ class RamseyExperiment:
             )
         return H0
 
+    def _static_hamiltonian(self):
+        a_ops = self.annihilation_ops()
+        q = self.tmon_ops()
+        H0 = sum(
+            (omega - self.omega_d_cav) * dq.dag(a_op) @ a_op
+            for (omega, a_op) in zip(self.omega_cavs, a_ops)
+        )
+        H0 += (self.omega_tmon - self.omega_d_tmon) * dq.dag(q) @ q
+        return H0
+
     def construct_c_ops_interference(self):
         a_ops = self.annihilation_ops()
         if len(a_ops) == 1:
@@ -217,9 +235,9 @@ class RamseyExperiment:
             kappa_cavs = self.kappa_cavs
             nths = self.nths()
             lowering_1 = (np.sqrt(kappa_cavs[0] * (1 + nths[0])) * a_ops[0]
-                        - self.destructive_interference * np.sqrt(kappa_cavs[1] * (1 + nths[1])) * a_ops[1])
+                          - self.destructive_interference * np.sqrt(kappa_cavs[1] * (1 + nths[1])) * a_ops[1])
             raising_1 = (np.sqrt(kappa_cavs[0] * nths[0]) * dq.dag(a_ops[0])
-                       - self.destructive_interference * np.sqrt(kappa_cavs[1] * nths[1]) * dq.dag(a_ops[1]))
+                         - self.destructive_interference * np.sqrt(kappa_cavs[1] * nths[1]) * dq.dag(a_ops[1]))
             return [lowering_1, raising_1]
         else:
             raise RuntimeError("more than two cavities not supported")
@@ -238,18 +256,6 @@ class RamseyExperiment:
             )
         ]
         return individual_lowering + individual_raising
-
-    def obtain_thermal_state(self, initial_state=None):
-        if self.thermal_time < 2.0 / np.min(self.kappa_cavs):
-            print("running for too short of a time to get a thermal state")
-        if initial_state is None:
-            initial_state = dq.fock(
-                self.truncated_dims, len(self.truncated_dims) * [0]
-            )
-        H = self.hamiltonian()
-        return self.mesolve_for_final_state(
-            H, initial_state, self.thermal_time
-        )
 
     @staticmethod
     def T2_func(t, t2, omega, a, b, phi):
@@ -284,7 +290,7 @@ class RamseyExperiment:
             / (2 * np.pi)
         )
 
-    def mesolve_for_final_state(self, H, init_dm, t):
+    def mesolve_for_final_state(self, H, init_dm, t, solver=Tsit5()):
         if self.interference:
             c_ops = self.construct_c_ops_interference()
         else:
@@ -299,7 +305,7 @@ class RamseyExperiment:
             init_dm,
             (0, t),
             exp_ops=e_ops,
-            # solver=Tsit5(max_steps=self.nsteps, atol=self.atol, rtol=self.rtol),
+            solver=solver,
             options=options,
         )
         # take occupation of first cavity as representative
@@ -315,37 +321,39 @@ class RamseyExperiment:
     def decoherence_experiment(self, full_cosine=False):
         final_prob = np.zeros_like(self.delay_times)
         q = self.tmon_ops()
-        thermal_state = self.obtain_thermal_state()
+        initial_state = dq.fock(
+            self.truncated_dims, len(self.truncated_dims) * [0]
+        )
         if full_cosine:
             H = self.hamiltonian_full()
-            H_with_drive = copy.deepcopy(H)
-            H_with_drive += [[
-                self.tmon_drive_amp * (q + q.dag()),
-                lambda t, a: np.cos(self.omega_d_tmon * t)
-            ]]
+            solver = Tsit5(max_steps=self.nsteps, atol=self.atol, rtol=self.rtol)
         else:
             H = self.hamiltonian()
-            # Hamiltonian for pi/2 pulses
-            H_with_drive = copy.deepcopy(H)
-            H_with_drive += 0.5 * self.tmon_drive_amp * (q + dq.dag(q))
+            solver = Expm()
+        thermal_state = self.mesolve_for_final_state(
+            H, initial_state, self.thermal_time
+        )
+        # Hamiltonian for pi/2 pulses
+        H_with_drive = copy.deepcopy(H)
+        H_with_drive += 0.5 * self.tmon_drive_amp * (q + dq.dag(q))
         readout = self.readout_proj()
         t_drive = np.pi / (2 * self.tmon_drive_amp)
         # pi/2 or pi pulses
         state_after_prev_delay = self.mesolve_for_final_state(
-            H_with_drive, thermal_state, t_drive
+            H_with_drive, thermal_state, t_drive, solver=solver,
         )
         final_state = self.mesolve_for_final_state(
-            H_with_drive, state_after_prev_delay, t_drive
+            H_with_drive, state_after_prev_delay, t_drive, solver=solver,
         )
         final_prob[0] = np.real(np.trace(final_state @ readout))
         delay_dif = self.delay_times[1] - self.delay_times[0]
         for idx in range(1, len(self.delay_times)):
             # run the delay
             state_after_delay = self.mesolve_for_final_state(
-                H, state_after_prev_delay, delay_dif
+                H, state_after_prev_delay, delay_dif, solver=solver,
             )
             final_state = self.mesolve_for_final_state(
-                H_with_drive, state_after_delay, t_drive
+                H_with_drive, state_after_delay, t_drive, solver=solver,
             )
             state_after_prev_delay = state_after_delay
             final_prob[idx] = np.real(np.trace(final_state @ readout))
@@ -455,17 +463,11 @@ class CoherentDephasing(RamseyExperiment):
         a_ops = self.annihilation_ops()
         a = a_ops[0]
         eps_a = self.epsilon_array[0]
-        H += [[
-            2.0 * (eps_a * a + np.conj(eps_a) * a.dag()),
-            lambda t, args: np.cos(self.omega_d_cav * t)
-        ]]
+        H += eps_a * a + np.conj(eps_a) * dq.dag(a)
         if len(a_ops) == 2:
-            a, b = a_ops[0], a_ops[1]
-            eps_a, eps_b = self.epsilon_array[0], self.epsilon_array[1]
-            H += [[
-                2.0 * (eps_b * b + np.conj(eps_b) * b.dag()),
-                lambda t, args: np.cos(self.omega_d_cav * t)
-            ]]
+            b = a_ops[1]
+            eps_b = self.epsilon_array[1]
+            H += eps_b * b + np.conj(eps_b) * dq.dag(b)
         return H
 
     def hamiltonian(self):
