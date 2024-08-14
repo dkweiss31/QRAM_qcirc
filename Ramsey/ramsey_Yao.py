@@ -1,21 +1,11 @@
 import copy
 
+import dynamiqs as dq
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
-from quantum_utils import id_wrap_ops, construct_basis_states_list, write_to_h5
-from qutip import (
-    destroy,
-    mesolve,
-    Options,
-    qeye,
-    tensor,
-    basis,
-    expect,
-    spre,
-    spost,
-)
+from quantum_utils import write_to_h5
 from scipy.constants import hbar, k
 from scipy.optimize import curve_fit
 
@@ -45,7 +35,6 @@ class RamseyExperiment:
         rtol=1e-6,
         destructive_interference=1,
         interference_scale=1.0,
-        include_stark_shifts=True,
     ):
         assert len(omega_cavs) == len(chi_cavstmon) == len(kappa_cavs) == num_cavs
         self.interference = interference
@@ -70,21 +59,21 @@ class RamseyExperiment:
         self.rtol = rtol
         self.destructive_interference = destructive_interference
         self.interference_scale = interference_scale
-        self.include_stark_shifts = include_stark_shifts
         self.truncated_dims = num_cavs * [cavity_dim] + [tmon_dim]
 
     def tmon_ops(self):
-        tmon_idx = self.num_cavs
-        q = id_wrap_ops(destroy(2), tmon_idx, self.truncated_dims)
+        ids = self.num_cavs * [dq.eye(self.cavity_dim)]
+        q = dq.tensor(dq.destroy(2), *ids)
         return q
 
     def annihilation_ops(self):
-        annihilation_ops_list = []
-        for idx in range(self.num_cavs):
-            annihilation_ops_list.append(
-                id_wrap_ops(destroy(self.cavity_dim), idx, self.truncated_dims)
-            )
-        return annihilation_ops_list
+        if self.num_cavs == 1:
+            return [dq.tensor(dq.eye(2), dq.destroy(self.cavity_dim)),]
+        elif self.num_cavs == 2:
+            return [dq.tensor(dq.eye(2), dq.destroy(self.cavity_dim), dq.eye(self.cavity_dim)),
+                    dq.tensor(dq.eye(2), dq.eye(self.cavity_dim), dq.destroy(self.cavity_dim))]
+        else:
+            raise ValueError("number of cavities needs to be 1 or 2")
 
     def nths(self):
         # omegas = np.array(len(self.omega_cavs) * [np.max(self.omega_cavs) + 0.2 * 2.0 * np.pi])
@@ -194,21 +183,21 @@ class RamseyExperiment:
         a_ops = self.annihilation_ops()
         q = self.tmon_ops()
         H0 = sum(
-            (omega - self.omega_d_cav) * a_op.dag() * a_op
+            (omega - self.omega_d_cav) * dq.dag(a_op) @ a_op
             for (omega, a_op) in zip(self.omega_cavs, self.annihilation_ops())
         )
-        H0 += (self.omega_tmon - self.omega_d_tmon) * q.dag() * q
+        H0 += (self.omega_tmon - self.omega_d_tmon) * dq.dag(q) @ q
         for idx, a_op in enumerate(a_ops):
-            H0 += self.chi_cavstmon[idx] * a_op.dag() * a_op * q.dag() * q
+            H0 += self.chi_cavstmon[idx] * dq.dag(a_op) @ a_op @ dq.dag(q) @ q
         if len(a_ops) == 1:
             a = a_ops[0]
             phi_a, phi_q = self.phi_cav(0), self.phi_q()
             H0 += (-self.EJ / 24) * (
-                    12 * phi_a ** 2 * (phi_a ** 2 + phi_q ** 2) * a.dag() * a
+                    12 * phi_a ** 2 * (phi_a ** 2 + phi_q ** 2) * dq.dag(a) @ a
             )
         if len(a_ops) == 2:
             a, b = a_ops[0], a_ops[1]
-            H0 += self.chi_crosscav[0] * a.dag() * a * b.dag() * b
+            H0 += self.chi_crosscav[0] * dq.dag(a) @ a @ dq.dag(b) @ b
             phi_a, phi_b, phi_q = self.phi_cav(0), self.phi_cav(1), self.phi_q()
             # check that the expressions for phi_a and phi_q are correct
             assert np.allclose(self.chi_cavstmon[0], -self.EJ * phi_a ** 2 * phi_q ** 2)
@@ -216,29 +205,9 @@ class RamseyExperiment:
             assert np.allclose(self.chi_crosscav[0], -self.EJ * phi_a**2 * phi_b**2)
             H0 += (-self.EJ / 24) * (
                     self.interference_scale * 24 * phi_a * phi_b * phi_q**2
-                    * q.dag() * q * (a.dag() * b + b.dag() * a)
+                    * dq.dag(q) @ q @ (dq.dag(a) @ b + dq.dag(b) @ a)
             )
-            if self.include_stark_shifts:
-                H0 += (-self.EJ / 24) * (
-                    12 * phi_a * phi_b * phi_q ** 2 * (a.dag() * b + b.dag() * a)
-                )
-                H0 += (-self.EJ / 24) * (
-                    12 * phi_a**2 * (phi_a**2 + phi_b**2 + phi_q**2) * a.dag() * a
-                )
-                H0 += (-self.EJ / 24) * (
-                    12 * phi_b**2 * (phi_a**2 + phi_b**2 + phi_q**2) * b.dag() * b
-                )
-        return [
-            H0,
-        ]
-
-    @staticmethod
-    def xinyuan_dissipator(a, b=None):
-        if b is None:
-            b = a
-        D = (0.5 * spre(a) * spost(b.dag()) + 0.5 * spre(b) * spost(a.dag())
-             - 0.5 * spre(b.dag() * a) - 0.5 * spost(a.dag() * b))
-        return D
+        return H0
 
     def construct_c_ops_interference(self):
         a_ops = self.annihilation_ops()
@@ -249,8 +218,8 @@ class RamseyExperiment:
             nths = self.nths()
             lowering_1 = (np.sqrt(kappa_cavs[0] * (1 + nths[0])) * a_ops[0]
                         - self.destructive_interference * np.sqrt(kappa_cavs[1] * (1 + nths[1])) * a_ops[1])
-            raising_1 = (np.sqrt(kappa_cavs[0] * nths[0]) * a_ops[0].dag()
-                       - self.destructive_interference * np.sqrt(kappa_cavs[1] * nths[1]) * a_ops[1].dag())
+            raising_1 = (np.sqrt(kappa_cavs[0] * nths[0]) * dq.dag(a_ops[0])
+                       - self.destructive_interference * np.sqrt(kappa_cavs[1] * nths[1]) * dq.dag(a_ops[1]))
             return [lowering_1, raising_1]
         else:
             raise RuntimeError("more than two cavities not supported")
@@ -263,7 +232,7 @@ class RamseyExperiment:
             )
         ]
         individual_raising = [
-            np.sqrt(kappa * nth) * a_op.dag()
+            np.sqrt(kappa * nth) * dq.dag(a_op)
             for (kappa, nth, a_op) in zip(
                 self.kappa_cavs, self.nths(), self.annihilation_ops()
             )
@@ -274,15 +243,9 @@ class RamseyExperiment:
         if self.thermal_time < 2.0 / np.min(self.kappa_cavs):
             print("running for too short of a time to get a thermal state")
         if initial_state is None:
-            fock_spec = tuple(len(self.truncated_dims) * [0])
-            (initial_state,) = construct_basis_states_list(
-                [
-                    fock_spec,
-                ],
-                self.truncated_dims,
+            initial_state = dq.fock(
+                self.truncated_dims, len(self.truncated_dims) * [0]
             )
-        elif initial_state.isket:
-            initial_state = initial_state * initial_state.dag()
         H = self.hamiltonian()
         return self.mesolve_for_final_state(
             H, initial_state, self.thermal_time
@@ -326,49 +289,28 @@ class RamseyExperiment:
             c_ops = self.construct_c_ops_interference()
         else:
             c_ops = self.construct_c_ops_no_interference()
-        e_ops = [a.dag() * a for a in self.annihilation_ops()]
-        options = Options(
-            store_final_state=True, nsteps=self.nsteps, atol=self.atol, rtol=self.rtol
+        e_ops = [dq.dag(a) @ a for a in self.annihilation_ops()]
+        options = dq.Options(
+            save_states=True, progress_meter=None,
         )
-        result = mesolve(
+        result = dq.mesolve(
             H,
+            c_ops,
             init_dm,
             (0, t),
-            c_ops=c_ops,
-            e_ops=e_ops,
+            exp_ops=e_ops,
+            # solver=Tsit5(max_steps=self.nsteps, atol=self.atol, rtol=self.rtol),
             options=options,
         )
         # take occupation of first cavity as representative
-        highest_state_proj = (
-            basis(self.cavity_dim, self.cavity_dim - 1)
-            * basis(self.cavity_dim, self.cavity_dim - 1).dag()
-        )
-        proj = id_wrap_ops(highest_state_proj, 0, self.truncated_dims)
-        print("occupation of highest state at final time: ", expect(proj, result.final_state))
-        print("expectation value of n_1: ", np.max(result.expect[0]))
+        print("expectation value of n_1: ", np.max(result.expects[0]))
         return result.final_state
 
-    def initial_state(self, exp_type="ramsey"):
-        init_cav = self.num_cavs * [basis(self.cavity_dim, 0)]
-        if exp_type == "ramsey":
-            initial_state = tensor(
-                *init_cav,
-                (basis(self.tmon_dim, 0) + basis(self.tmon_dim, 1)).unit()
-            )
-        elif exp_type == "T1":
-            initial_state = tensor(
-                *init_cav,
-                basis(self.tmon_dim, 1)
-            )
-        else:
-            raise RuntimeError("gate type not supported")
-        return initial_state
-
     def readout_proj(self, tmon_idx=0):
-        op_list = self.num_cavs * [qeye(self.cavity_dim)] + [
-            basis(self.tmon_dim, tmon_idx) * basis(self.tmon_dim, tmon_idx).dag()
+        op_list = self.num_cavs * [dq.eye(self.cavity_dim)] + [
+            dq.basis(self.tmon_dim, tmon_idx) @ dq.dag(dq.basis(self.tmon_dim, tmon_idx))
         ]
-        return tensor(*op_list)
+        return dq.tensor(*op_list)
 
     def decoherence_experiment(self, full_cosine=False):
         final_prob = np.zeros_like(self.delay_times)
@@ -385,7 +327,7 @@ class RamseyExperiment:
             H = self.hamiltonian()
             # Hamiltonian for pi/2 pulses
             H_with_drive = copy.deepcopy(H)
-            H_with_drive[0] += 0.5 * self.tmon_drive_amp * (q + q.dag())
+            H_with_drive += 0.5 * self.tmon_drive_amp * (q + dq.dag(q))
         readout = self.readout_proj()
         t_drive = np.pi / (2 * self.tmon_drive_amp)
         # pi/2 or pi pulses
@@ -395,7 +337,7 @@ class RamseyExperiment:
         final_state = self.mesolve_for_final_state(
             H_with_drive, state_after_prev_delay, t_drive
         )
-        final_prob[0] = np.real(np.trace(final_state * readout))
+        final_prob[0] = np.real(np.trace(final_state @ readout))
         delay_dif = self.delay_times[1] - self.delay_times[0]
         for idx in range(1, len(self.delay_times)):
             # run the delay
@@ -406,7 +348,7 @@ class RamseyExperiment:
                 H_with_drive, state_after_delay, t_drive
             )
             state_after_prev_delay = state_after_delay
-            final_prob[idx] = np.real(np.trace(final_state * readout))
+            final_prob[idx] = np.real(np.trace(final_state @ readout))
         return final_prob
 
     def plot_ramsey(self, ramsey_result, popt_T2, filename=None):
@@ -532,15 +474,12 @@ class CoherentDephasing(RamseyExperiment):
         if len(a_ops) == 1:
             a = a_ops[0]
             eps = self.epsilon_array[0]
-            H[0] += eps * a + np.conj(eps) * a.dag()
+            H += eps * a + np.conj(eps) * dq.dag(a)
         elif len(a_ops) == 2:
             a, b = a_ops[0], a_ops[1]
             eps_a, eps_b = self.epsilon_array[0], self.epsilon_array[1]
-            H[0] += -1j * (b * eps_b - a * eps_a)
-            H[0] += 1j * (b.dag() * np.conj(eps_b) - a.dag() * np.conj(eps_a))
-            # if self.include_cr:
-            #     H += [[eps * a, lambda t, args: np.exp(-2 * 1j * self.omega_d_cav * t)], ]
-            #     H += [[np.conj(eps) * a.dag(), lambda t, args: np.exp(2 * 1j * self.omega_d_cav * t)], ]
+            H += -1j * (b * eps_b - a * eps_a)
+            H += 1j * (dq.dag(b) * np.conj(eps_b) - dq.dag(a) * np.conj(eps_a))
         else:
             raise RuntimeError("only one or two cavities supported")
         return H

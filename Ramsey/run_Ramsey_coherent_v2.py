@@ -21,14 +21,13 @@ if __name__ == "__main__":
     parser.add_argument("--omega_d_vals", default="(3.3261,3.3261)", type=str, help="omega_d endpoint")
     parser.add_argument("--eps", default=0.01, type=float, help="drive strength in GHz")
     parser.add_argument("--cav_dim", default=7, type=int, help="cavity dimension")
-    parser.add_argument("--num_cavs", default=1, type=int, help="number of cavities")
+    parser.add_argument("--num_cavs", default=2, type=int, help="number of cavities")
     # parser.add_argument("--delay_times", default="(0,32000,4801)", type=str, help="delay times to scan over")
     parser.add_argument("--delay_times", default="(0,2000,301)", type=str, help="delay times to scan over")
     parser.add_argument("--nsteps", default=200000, type=int, help="nsteps for mesolve")
     parser.add_argument("--temp", default=1e-6, type=float, help="temperature")
     parser.add_argument("--destructive_interference", default=-1, type=complex, help="destructive interference")
     parser.add_argument("--interference_scale", default=1, type=int, help="scale of the chi_ab term")
-    parser.add_argument("--include_stark_shifts", default=0, type=int, help="include stark shifts")
     parser.add_argument("--thermal_time", default=1000.0, type=float, help="time spent thermalizing")
     parser.add_argument("--full_cosine", default=False, type=bool, help="full cosine or not")
     args = parser.parse_args()
@@ -69,7 +68,6 @@ if __name__ == "__main__":
     param_dict["thermal_time"] = args.thermal_time
     param_dict["temp"] = args.temp
     param_dict["destructive_interference"] = args.destructive_interference
-    param_dict["include_stark_shifts"] = args.include_stark_shifts
     param_dict["interference_scale"] = args.interference_scale
     param_dict["interference"] = args.interference
     if args.exp_type == "ramsey":
