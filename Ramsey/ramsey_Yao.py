@@ -11,6 +11,8 @@ from quantum_utils import write_to_h5
 from scipy.constants import hbar, k
 from scipy.optimize import curve_fit
 
+dq.set_precision("double")
+
 
 class RamseyExperiment:
     def __init__(
@@ -93,48 +95,39 @@ class RamseyExperiment:
     def phi_q(self):
         return (2 * np.abs(self.alpha) / self.EJ)**(1/4)
 
-    def quadratic_term(self, phi_list, a_op_list):
-        assert len(phi_list) == len(a_op_list)
-        H = 0.0 * a_op_list[0]
-        for phi, a_op in zip(phi_list, a_op_list):
-            H += phi**2 * dq.dag(a_op) @ a_op
-            cr_term = 0.5 * phi**2 * dq.powm(a_op, 2)
-            H += cr_term + dq.dag(cr_term)
-        for idx_a, (phi_a, a_op) in enumerate(zip(phi_list, a_op_list)):
-            for idx_b, (phi_b, b_op) in enumerate(zip(phi_list, a_op_list)):
-                if idx_b > idx_a:
-                    pref = 0.5 * phi_a * phi_b
-                    term = pref * (a_op @ dq.dag(b_op) + a_op @ b_op)
-                    H += term + dq.dag(term)
-        return H
-
     def cos_normal_ordered(self, phi, a_op):
         dim = a_op.shape[0] + 1
         H = 0.0 * a_op
-        overall_pref = np.exp(-0.5 * phi**2)
         for n in range(dim):
             for m in range(dim):
                 if (n + m) % 2 == 0:
-                    pref = ((-phi**2)**((n + m) / 2)
-                            / sp.special.factorial(n)
-                            / sp.special.factorial(m)
-                            )
-                    H += overall_pref * pref * dq.powm(dq.dag(a_op), n) @ dq.powm(a_op, m)
+                    H += self._cosine_normal_ordered_term(phi, a_op, n, m)
         return H
 
     def sin_normal_ordered(self, phi, a_op):
         dim = a_op.shape[0] + 1
         H = 0.0 * a_op
-        overall_pref = np.exp(-0.5 * phi ** 2) * phi
         for n in range(dim):
             for m in range(dim):
                 if (n + m) % 2 == 1:
-                    pref = ((-phi ** 2) ** ((n + m - 1) / 2)
-                            / sp.special.factorial(n)
-                            / sp.special.factorial(m)
-                            )
-                    H += overall_pref * pref * dq.powm(dq.dag(a_op), n) @ dq.powm(a_op, m)
+                    H += self._sine_normal_ordered_term(phi, a_op, n, m)
         return H
+
+    def _cosine_normal_ordered_term(self, phi, a_op, n, m):
+        overall_pref = np.exp(-0.5 * phi ** 2)
+        pref = ((-phi ** 2) ** ((n + m) / 2)
+                / sp.special.factorial(n)
+                / sp.special.factorial(m)
+                )
+        return overall_pref * pref * dq.powm(dq.dag(a_op), n) @ dq.powm(a_op, m)
+
+    def _sine_normal_ordered_term(self, phi, a_op, n, m):
+        overall_pref = np.exp(-0.5 * phi ** 2) * phi
+        pref = ((-phi ** 2) ** ((n + m - 1) / 2)
+                / sp.special.factorial(n)
+                / sp.special.factorial(m)
+                )
+        return overall_pref * pref * dq.powm(dq.dag(a_op), n) @ dq.powm(a_op, m)
 
     def hamiltonian_full(self):
         a_ops = self.annihilation_ops()
@@ -143,12 +136,25 @@ class RamseyExperiment:
         if len(a_ops) == 1:
             phi_a, phi_q = self.phi_cav(0), self.phi_q()
             H0 += (-self.EJ
-                   * (self.cos_normal_ordered(phi_a, a_ops[0]) * np.cos(phi_q)
+                   * (self.cos_normal_ordered(phi_a, a_ops[0])
+                      @ self.cos_normal_ordered(phi_q, q)
                       - self.sin_normal_ordered(phi_a, a_ops[0])
-                      @ (np.sin(phi_q) * (q + dq.dag(q)))
+                      @ self.sin_normal_ordered(phi_q, q)
                       )
                    )
-            H0 += -self.EJ * self.quadratic_term([phi_a, phi_q], [a_ops[0], q])
+            harm_indices = list(np.ndindex(2, 2, 2, 2))
+            for (j, k, l, m) in harm_indices:
+                if (j + k) % 2 == 0 and (l + m) % 2 == 0 and j + k + l + m == 2:
+                    H0 += self.EJ * self._cosine_normal_ordered_term(
+                        phi_a, a_ops[0], j, k
+                    ) @ self._cosine_normal_ordered_term(phi_q, q, l, m)
+                if (j + k) % 2 == 1 and (l + m) % 2 == 1 and j + k + l + m == 0:
+                    H0 += (-self.EJ
+                           @ self._sine_normal_ordered_term(
+                                phi_a, a_ops[0], j, k
+                            )
+                           @ self._sine_normal_ordered_term(phi_q, q, l, m)
+                           )
         elif len(a_ops) == 2:
             a, b = a_ops[0], a_ops[1]
             phi_a, phi_b, phi_q = self.phi_cav(0), self.phi_cav(1), self.phi_q()
@@ -172,10 +178,8 @@ class RamseyExperiment:
                     @ self.sin_normal_ordered(phi_b, b)
                     * np.cos(phi_q)
             )
-            harm_term = -self.EJ * self.quadratic_term(
-                [phi_a, phi_b, phi_q], [a, b, q]
-            )
-            H0 += term_1 + term_2 + term_3 + term_4 + harm_term
+            # TODO harmonic subtraction
+            H0 += term_1 + term_2 + term_3 + term_4 # + harm_term
         else:
             raise ValueError("a_ops can have one or two operators")
         bare_labels = self.bare_labels()

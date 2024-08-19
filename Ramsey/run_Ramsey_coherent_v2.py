@@ -24,12 +24,14 @@ if __name__ == "__main__":
     parser.add_argument("--num_cavs", default=1, type=int, help="number of cavities")
     # parser.add_argument("--delay_times", default="(0,32000,4801)", type=str, help="delay times to scan over")
     parser.add_argument("--delay_times", default="(0,2000,301)", type=str, help="delay times to scan over")
-    parser.add_argument("--nsteps", default=1_000_000, type=int, help="nsteps for mesolve")
+    parser.add_argument("--nsteps", default=10_000_000, type=int, help="nsteps for mesolve")
     parser.add_argument("--temp", default=1e-6, type=float, help="temperature")
     parser.add_argument("--destructive_interference", default=-1, type=complex, help="destructive interference")
     parser.add_argument("--interference_scale", default=1, type=int, help="scale of the chi_ab term")
     parser.add_argument("--thermal_time", default=1000.0, type=float, help="time spent thermalizing")
-    parser.add_argument("--full_cosine", default=False, type=bool, help="full cosine or not")
+    parser.add_argument("--full_cosine", default=True, type=bool, help="full cosine or not")
+    parser.add_argument("--atol", default=1e-8, type=float, help="atol for numerical integration")
+    parser.add_argument("--rtol", default=1e-8, type=float, help="rtol for numerical integration")
     args = parser.parse_args()
     if args.idx != -1:
         filepath = f"out/{str(args.idx).zfill(5)}_cohere_Ramsey.h5py"
@@ -70,6 +72,8 @@ if __name__ == "__main__":
     param_dict["destructive_interference"] = args.destructive_interference
     param_dict["interference_scale"] = args.interference_scale
     param_dict["interference"] = args.interference
+    param_dict["atol"] = args.atol
+    param_dict["rtol"] = args.rtol
     if args.exp_type == "ramsey":
         # p0 = (6 * 10 ** 4, 0.045, -1.7)
         p0 = (1 * 10 ** 4, 0.0433, 0.5, 0.5, -1.8)
