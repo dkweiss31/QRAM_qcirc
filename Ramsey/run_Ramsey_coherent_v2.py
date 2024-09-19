@@ -23,7 +23,7 @@ if __name__ == "__main__":
     parser.add_argument("--cav_dim", default=7, type=int, help="cavity dimension")
     parser.add_argument("--num_cavs", default=1, type=int, help="number of cavities")
     # parser.add_argument("--delay_times", default="(0,32000,4801)", type=str, help="delay times to scan over")
-    parser.add_argument("--delay_times", default="(0,2000,301)", type=str, help="delay times to scan over")
+    parser.add_argument("--delay_times", default="(0,10000,301)", type=str, help="delay times to scan over")
     parser.add_argument("--nsteps", default=10_000_000, type=int, help="nsteps for mesolve")
     parser.add_argument("--temp", default=1e-6, type=float, help="temperature")
     parser.add_argument("--destructive_interference", default=-1, type=complex, help="destructive interference")
@@ -74,11 +74,12 @@ if __name__ == "__main__":
     param_dict["interference"] = args.interference
     param_dict["atol"] = args.atol
     param_dict["rtol"] = args.rtol
+    param_dict["exp_type"] = args.exp_type
     if args.exp_type == "ramsey":
         # p0 = (6 * 10 ** 4, 0.045, -1.7)
         p0 = (1 * 10 ** 4, 0.0433, 0.5, 0.5, -1.8)
     elif args.exp_type == "T1":
-        p0 = (4 * 10 ** 4, 1.0, 0.0,)
+        p0 = (4 * 10 ** 3, 1.0, 0.0,)
     else:
         raise RuntimeError("unsupported experiment type")
     ramsey_coherent = CoherentDephasing(**param_dict)
